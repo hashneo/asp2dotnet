@@ -1,0 +1,26 @@
+{
+  "name": "asp2dotnet",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hashneo/asp2dotnet.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hashneo/asp2dotnet/issues"
+  },
+  "homepage": "https://github.com/hashneo/asp2dotnet",
+  "dependencies": {
+    "forallasync": "^1.0.2",
+    "glob": "^5.0.13",
+    "mkdirp": "^0.5.1",
+    "node-uuid": "^1.4.3",
+    "stream-buffers": "^2.2.0"
+  }
+}
