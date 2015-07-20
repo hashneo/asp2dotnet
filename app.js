@@ -28,12 +28,12 @@ function sanitizeCode( code ){
         .replace(/isEmpty\s*(?=\(*)/gi,'String.isNullOrEmpty')
         .replace(/Set\s+/gi,'')
         .replace(/\s{0}_$/gmi,' _')
-        .replace(/sub\s+class_initialize/gi,'Sub New')
-        .replace(/sub\s+class_terminate/gi,'Protected Overrides Sub Finalize')
+        .replace(/^\s+\w*\s*sub\s+class_initialize/gmi,'Sub New')
+        .replace(/^\s+\w*\s*sub\s+class_terminate/gmi,'Protected Overrides Sub Finalize')
         .replace(/Server\.CreateObject\s*\((.*)\)/gi,'System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
         .replace(/=\s+CreateObject\s*\((.*)\)/gi,'= System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
         .replace(/\bnull\b/gi,'DBNull.Value')
-        .replace(/\barray\b\s*\((.*)\)/gi,'New Object(){ $1 }');
+        .replace(/\barray\b\s*\((.*?)\)/gi,'New Object(){ $1 }');
 
     code = code.replace(/\S_$/gmi,' _');
 
@@ -136,13 +136,11 @@ function processFile( complete, entry, i ) {
     var sourceFile = entry.in;
 
     // Prevent files being processed twice
-    for ( var file in functionMapCache ){
-        if ( file.toLowerCase === sourceFile.toLowerCase() ){
-            console.log( 'I have already processed file => ' + file + ', skipping' );
-            functionMap = functionMapCache[sourceFile];
-            complete();
-            return;
-        }
+    if ( functionMapCache[entry.class] ){
+        console.log( 'I have already processed file => ' + sourceFile + ', skipping' );
+        functionMap = functionMapCache[entry.class];
+        complete();
+        return;
     }
     /*
     for ( var i = 0 ; i < processedList.length ; i++ ){
@@ -174,22 +172,13 @@ function processFile( complete, entry, i ) {
 
         var match;
 
-        // If there is no ASP VBScript tag, we move to module mode and will not create and ASP file
-
+        // If there is no ASP VBScript tag, we move to module mode and don't create an ASP file
         if ( !data.match( /<%@.*%>/g ) ){
-
-        //if ( entry.name.indexOf('inc_') == 0 ){
-        //    entry.name = entry.name.replace('inc_', '');
             entry.aspx = null;
             entry.vb = entry.vb.replace('inc_', '').replace('.aspx.vb', '.vb');
             var className = entry.name.toLowerCase().replace('inc_','').replace('const_','').replace(/_/g,' ').replace(/(\b[a-z](?!\s))/g, function(x){ return x.toUpperCase();}).replace(/ /g,'');
             entry.class = 'cls' + className;
-
-            //aspxFile = null;
-            //vbFile = path.join( targetPath, className + '.vb' );
-        //}
         }
-
 
         mkdirp.sync(targetPath, function(err) {
             console.log('could not create dir => ' + targetPath );
@@ -272,7 +261,7 @@ function processFile( complete, entry, i ) {
             while (( match = regEx.exec(data) ) != null) {
                 var codeBlock = match[1];
                 var className = match[3];
-                classBlocks += sanitizeCode(codeBlock);
+                classBlocks += sanitizeCode(codeBlock) +'\n';
                 remainingData = remainingData.replace(codeBlock, "");
             }
 
@@ -393,6 +382,7 @@ function processFile( complete, entry, i ) {
 
             // Get the stream data and convert it to a string
             data = os.getContents();
+
             remainingData = data.toString('utf8');
             data = remainingData;
 
@@ -714,7 +704,7 @@ function processFile( complete, entry, i ) {
                 vb.write( '\n' + classBlocks + '\n' );
             }
 
-            functionMapCache[entry.in] = functionMap;
+            functionMapCache[entry.class] = functionMap;
 
             complete();
         });
@@ -754,6 +744,7 @@ glob( searchString, function( err, files ) {
     forAllAsync(processingList, function processAspFile( complete, entry, i ){
         functionMap = {};
         processFile( complete, entry, i );
+
     }, maxCallsAtOnce).then(function () {
 
         fs.readFile('template.vbproj', function (err, data) {
