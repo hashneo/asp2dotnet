@@ -7,7 +7,7 @@ node app.js --base <root ASP directory> --page <start page> --out <target path> 
 --rabbit-hole = Follow linked ASP pages and try and process the whole site. Let's see where this rabbit hole goes.
 --verbose = Print mor stuff to the screen
 --no-includes = Ignore processing include files
---overwrite = By default the program won;t overwrite existinf aspx and vb files, this ignores that.
+--overwrite = By default the program won't overwrite existinf aspx and vb files, this ignores that.
 
 And example would be:
 node app.js --base c:\inetpub\wwwroot --page default.asp --out c:\inetpub\asp.net --rabbit-hole
