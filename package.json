@@ -21,6 +21,7 @@
     "glob": "^5.0.13",
     "mkdirp": "^0.5.1",
     "node-uuid": "^1.4.3",
+    "optimist": "^0.6.1",
     "stream-buffers": "^2.2.0"
   }
 }

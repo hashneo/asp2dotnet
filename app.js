@@ -1,18 +1,15 @@
 var fs = require('fs');
 var path = require('path');
-var glob = require('glob');
 var mkdirp = require('mkdirp');
-var forAllAsync = exports.forAllAsync || require('forallasync').forAllAsync
-    , maxCallsAtOnce = 1
 var streamBuffers = require("stream-buffers");
+var argv = require('optimist').argv;
 var uuid = require('node-uuid');
 
-var processingList = [];
 var functionMap = {};   // Map of global functions which we need to tie back to the defining class later
-var processedList = [];
-var usageMap = {};
 var functionMapCache = {};
 var writtenClasses = {};
+var basePath;
+var sourceFiles = [];
 
 String.prototype.endsWith = function (suffix) {
     return this.indexOf(suffix, this.length - suffix.length) !== -1;
@@ -34,7 +31,11 @@ function sanitizeCode( code ){
         .replace(/Server\.CreateObject\s*\((.*)\)/gi,'System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
         .replace(/=\s+CreateObject\s*\((.*)\)/gi,'= System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
         .replace(/\bnull\b/gi,'DBNull.Value')
-        .replace(/\barray\b\s*\((.*?)\)/gi,'New Object(){ $1 }');
+        .replace(/\barray\b\s*\((.*?)\)/gi,'New Object(){ $1 }')
+        .replace(/Not\s+IsObject\s*\((.*)\)/gi,'$1 Is Nothing')
+        .replace(/IsObject\s*\((.*)\)/gi,'Not ($1 Is Nothing)')
+        .replace(/\bEmpty\b/gi,'Nothing')
+        //.replace(/Append\s+(.*)/gi, 'Append( $1 ) ')
 
     code = code.replace(/\S_$/gmi,' _');
 
@@ -66,15 +67,29 @@ function isOpenSelectCase(code) {
     return c;
 }
 
-function isOpenIfThenElseBlock(code) {
-    var c = false;
+function isOpenIfThenElseBlock(code, nestCounter) {
     var regEx = /\b(if|elseif|then(?=\s*\n*)|else|end\s+if)\b/gi;
     while (( match = regEx.exec(code) ) != null) {
         var word = match[1].toLowerCase();
-        c = ( word != 'end if' );
+        switch ( word ){
+            case 'if':
+                break;
+            case 'elseif':
+                break;
+            case 'then':
+                nestCounter.if++;
+                break;
+            case 'else':
+                break;
+            case 'end if':
+                if ( nestCounter.if > 0 )
+                    nestCounter.if--;
+                break;
+        }
     }
-    return c;
+    return nestCounter.if > 0;
 }
+
 
 function isOpenDoLoop(code) {
     var c = false;
@@ -82,16 +97,6 @@ function isOpenDoLoop(code) {
     while (( match = regEx.exec(code) ) != null) {
         var word = match[1].toLowerCase();
         c = ( word != 'loop' && word != 'wend' );
-    }
-    return c;
-}
-
-function isOpenForLoop(code) {
-    var c = false;
-    var regEx = /\b((for\s+)|exit\s+for|next)\b/gi;
-    while (( match = regEx.exec(code) ) != null) {
-        var word = match[1].toLowerCase();
-        c = ( word != 'next' );
     }
     return c;
 }
@@ -132,16 +137,20 @@ function isEndSubFunction(code) {
 }
 
 
-function processFile( entry, writeMode ) {
+function processFile( entry, rabbitHoleMode, writeMode ) {
 
     var sourceFile = entry.in;
 
     // Prevent files being processed twice
 
-    if ( writeMode && writtenClasses[entry.class] ){
+    if ( writeMode ){
+
+        if ( writtenClasses[entry.class] ){
+            //console.log( 'I have already processed file => ' + sourceFile + ', skipping' );
+            return;
+        }
+
         writtenClasses[entry.class] = true;
-        console.log( 'I have already processed file => ' + sourceFile + ', skipping' );
-        return;
     }
 /*
     functionMap = functionMapCache[entry.class];
@@ -158,16 +167,14 @@ function processFile( entry, writeMode ) {
     var data = fs.readFileSync(sourceFile);
 
     if ( !writeMode ){
-        console.log( 'pre-reading and merging file => ' + sourceFile );
+        if ( argv.verbose )
+            console.log( 'pre-reading and merging file => ' + sourceFile );
     }
 
     var sourcePath = path.dirname( sourceFile );
     var targetPath = path.dirname(  entry.vb );
 
-
-    data = data.toString('utf8');
-
-    data = data.replace(/_\r\n(\t*|\s*)/gi,'');
+    data = data.toString('utf8').replace(/_\r\n(\t*|\s*)/gi,'');
 
     var match;
 
@@ -184,22 +191,22 @@ function processFile( entry, writeMode ) {
         throw err;
     });
 
-    // Strip out includes
-    var inclRegex = /<!--\s*\#include\s+(file|virtual)\s*="(.*)"\s*-->/gi;
+    var regEx;
 
-    var processingIncludeList = [];
+    // Strip out includes
+    regEx = /<!--\s*\#include\s+(file|virtual)\s*="(.*)"\s*-->/gi;
 
     var htmlIncludes = [];
 
-    while (( match = inclRegex.exec(data) ) != null) {
+    data = data.replace( regEx, function( match, p1, p2 ){
 
-        var matchFile = match[2].replace(/\\/g,'/');
+        var matchFile = p2.replace(/\\/g,'/');
 
         var includeFile = includeFile = path.normalize(path.join( sourcePath ,matchFile )).trim();
 
         if ( !fs.existsSync(includeFile) ){
             console.log( 'WARNING: include file => ' + includeFile + ' does not exists, skipping' );
-            continue;
+            return '';
         }
 
         var file = includeFile;
@@ -210,27 +217,32 @@ function processFile( entry, writeMode ) {
 
         if ( parts.ext.toLowerCase() !== '.asp' ) {
             htmlIncludes.push( {'file': matchFile, 'tag': match[0]} );
-            continue;
+            return '';
         }
 
-        var subPath = path.relative( sourcePath, filePath );
+        var subPath = path.relative( sourcePath, filePath).toLowerCase();
 
         var outPath = path.normalize( path.join( targetPath, subPath ) );
 
-        var className = fileName.toLowerCase().replace('inc_','').replace('const_','').replace(/_/g,' ').replace(/(\b[a-z](?!\s))/g, function(x){ return x.toUpperCase();}).replace(/ /g,'');
+        var className = fileName.replace('inc_','').replace('const_','').replace(/_/g,' ').replace(/(\b[a-z](?!\s))/g, function(x){ return x.toUpperCase();}).replace(/ /g,'');
 
-        var aspxFile = path.join( outPath, className + '.aspx' );
-        var vbFile = path.join( outPath, className + '.aspx.vb' );
+        fileName = fileName.replace('inc_','').replace('const_','').toLowerCase();
+
+        var aspxFile = path.join( outPath, fileName + '.aspx' );
+        var vbFile = path.join( outPath, fileName + '.aspx.vb' );
 
         includeFiles.push( { 'file' : includeFile, 'class' : 'cls' + className } );
 
-        processFile( { 'name' : fileName, 'class' : 'cls' + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile }, writeMode );
-    }
+        if ( argv['includes'] !== false )
+            processFile( { 'name' : fileName, 'class' : 'cls' + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile }, rabbitHoleMode, writeMode );
+
+        return '';
+    });
+
 
     // Inject whatever html the file has included
     for ( var i = 0 ; i < htmlIncludes.length ; i++ ){
         var htmlInclude = htmlIncludes[i];
-        //var contents = fs.readFileSync(htmlInclude.file).toString();
         var contents = '<% Response.WriteFile ("' + htmlInclude.file+ '")" %>';
         data = data.replace( htmlInclude.tag, contents );
     }
@@ -238,16 +250,24 @@ function processFile( entry, writeMode ) {
     // Process the include files first as we need a function map later
 
     var aspx = null;
+    var vb = null;
 
     if ( writeMode ){
         if ( entry.aspx != null ){
-            console.log( 'writing aspx source file => ' + entry.aspx );
-            aspx = fs.createWriteStream(entry.aspx);
+            if ( argv.overwrite == undefined && fs.existsSync(entry.aspx) ){
+                console.log( 'WARNING: aspx file already exists => ' + entry.aspx + ', skipping' );
+            }else{
+                console.log( 'writing aspx source file => ' + entry.aspx );
+                aspx = fs.createWriteStream(entry.aspx);
+            }
         }
 
-        var vb = fs.createWriteStream(entry.vb);
-
-        console.log( 'writing vb source file => ' + entry.vb );
+        if ( argv.overwrite == undefined && fs.existsSync(entry.vb) ){
+            console.log( 'WARNING: vb file already exists => ' + entry.vb + ', skipping' );
+        }else{
+            vb = fs.createWriteStream(entry.vb);
+            console.log( 'writing vb source file => ' + entry.vb );
+        }
     }
 
     var os = new streamBuffers.WritableStreamBuffer({
@@ -255,10 +275,49 @@ function processFile( entry, writeMode ) {
         incrementAmount: (10 * 1024)    // grow by 10 kilobytes each time buffer overflows.
     });
 
-    // Remove classes
-    var regEx = /((?!'(?:\n|\r)|(?:\n|\r))(?:\s*'.*?\r\n)*(class\s*(\w+))(?:[\s\S]+?)(?:end\s+(?:class)))/gmi;
+    // Look for Linked ASP files as we will add them to the list we need to process
+    var regEx = /"(([-a-zA-Z0-9/\-_]+?\.asp)(?!\w+)(\?*.*)?)"/gi;
+    data = data.replace( regEx, function(match, p1, p2, p3, offset, string){
+        if ( rabbitHoleMode && writeMode ){
+            /*
+            var p2Parts = path.parse(p2);
+            if ( p2Parts.name.toLowerCase() === entry.name.toLowerCase() ){
+                return match;
+            }else{
+            */
 
-    var remainingData = data;//.toString('utf8');
+                if ( entry.class == 'pageDefault') {
+                    __Debug = 1;
+                }
+                var nextFile = path.join( basePath, p2 );
+                var  addFile = true;
+                for ( var x = 0 ; x < sourceFiles.length ; x++ ){
+                    if ( nextFile.toLowerCase() === sourceFiles[x].toLowerCase() ){
+                        addFile = false;
+                        break;
+                    }
+                }
+                if ( addFile ){
+                    if ( !fs.existsSync(nextFile)  ){
+                        //console.log( 'WARNING: asp file => ' + nextFile + ' is referenced in => ' + sourceFile + ' but it doesn\'t exists' );
+                        return match;
+                    }else{
+                        sourceFiles.push( nextFile );
+                    }
+                }
+                return match.replace(p2, p2.replace('.asp','.aspx'));
+
+            //}
+
+        }else{
+            return match;
+        }
+    });
+
+    // Remove classes
+    regEx = /((?!'(?:\n|\r)|(?:\n|\r))(?:\s*'.*?\r\n)*(class\s*(\w+))(?:[\s\S]+?)(?:end\s+(?:class)))/gmi;
+
+    var remainingData = data;
 
     var classBlocks = '';
     while (( match = regEx.exec(data) ) != null) {
@@ -269,7 +328,19 @@ function processFile( entry, writeMode ) {
     }
 
     // Strip out code blocks
-    var codeRegEx = /(?:<%|<SCRIPT\s+LANGUAGE\s*=\s*"VBScript"\s+RUNAT\s*=\s*"Server">)[\s\r\n\t]*(?=[^=|@])([\s\S]+?)[\s\r\n\t]*(?:%>\s*|<\/SCRIPT>(?!.*")\s*)/gi;
+   //var codeRegEx = /(?:<%|<SCRIPT\s+LANGUAGE\s*=\s*"VBScript"\s+RUNAT\s*=\s*"Server">)[\s\r\n\t]*(?=[^=|@])([\s\S]+?)[\s\r\n\t]*(?:%>\s*|<\/SCRIPT>(?!.*")\s*)/gi;
+
+
+    // Replace RUNAT Server Tag with VBScript Marker
+    regEx = /<SCRIPT\s+LANGUAGE\s*=\s*"VBScript"\s+RUNAT\s*=\s*"Server">([\s\r\n\t]*(?=[^=|@])([\s\S]+)[\s\r\n\t]*)<\/SCRIPT>/gi;
+
+    var remainingData = data;
+
+    data = data.replace(regEx, function(match, p1) {
+            return '<%\n' + p1 +'%>\n';
+    });
+
+    var codeRegEx = /(?:<%)[\s\r\n\t]*(?=[^=|@])([\s\S]+?)[\s\r\n\t]*(?:%>\s*)/gi;
 
     data = remainingData;
     while (( match = codeRegEx.exec(data) ) != null) {
@@ -293,6 +364,8 @@ function processFile( entry, writeMode ) {
     // Iterate over code blocks looking for inline HTML
     var isInSub = false;
 
+    var nestCounter = { 'if' : 0 };
+
     // If its less than 2 blocks, no way can it have HTML in between
     for (var i = 0; i < codeBlocks.length - 1; i++) {
         var thisBlock = codeBlocks[i];
@@ -315,7 +388,7 @@ function processFile( entry, writeMode ) {
 
         // If we read any open open ended statements, capture the code as we will
         // convert to a Response.Write
-        if (isOpenIfThenElseBlock(code) ||
+        if (isOpenIfThenElseBlock(code, nestCounter)  ||
             isOpenDoLoop(code) ||
             isOpenForLoop(code) ||
             isOpenSelectCase(code) || isInSub) {
@@ -346,7 +419,6 @@ function processFile( entry, writeMode ) {
         }
 
         htmlChunk = htmlChunk.replace(/<%@.*%>/g, '<%@ Page Language="VB" AutoEventWireup="true" CodeBehind="' + entry.name + '.aspx.vb" Inherits="' + entry.class + '" %>');
-        htmlChunk = htmlChunk.replace(/<!--\s*\#include\s+(file|virtual)\s*="(.*)"\s*-->\r\n*/g, '');
 
         if (aspx != null && writeMode)
             aspx.write(replaceInlineCode(htmlChunk));
@@ -381,7 +453,7 @@ function processFile( entry, writeMode ) {
     }
 
     // Strip out code functions and subs
-    var regEx = /((?!'(?:\n|\r)|(?:\n|\r))(?:\s*'.*?\r\n)*(?:public|private\s+|)(?:sub\s+(\w+)\s*\(*.*\)*|function\s+(\w+)\s*\(.*\))(?:[\s\S]+?)(?:end\s+(?:sub|function))($:\r\n)*)/gi;
+    var regEx = /((?!'(?:\n|\r)|(?:\n|\r))(?:\s*'.*?\r\n)*(?:'\s*)?(?:public|private\s+|)(?:sub\s+(\w+)\s*\(*(.*)\)*|function\s+(\w+)\s*\((.*)\))(?:[\s\S]+?)(?:end\s+(?:sub|function))($:\r\n)*)/gi;
 
     // Get the stream data and convert it to a string
     data = os.getContents();
@@ -395,13 +467,16 @@ function processFile( entry, writeMode ) {
 
     while (( match = regEx.exec(data) ) != null) {
         var codeBlock = match[1];
-
+        var parameters = match[3];
         var fnName = match[2];
-        if (fnName === undefined)
-            fnName = match[3];
+
+        if (fnName === undefined){
+            fnName = match[4];
+            parameters = match[5];
+        }
 
         if (fnName !== undefined) {
-            functionMap[entry.class][fnName] = {'name': fnName, 'hits': 0};
+            functionMap[entry.class][fnName] = {'name': fnName, 'parameters' : parameters.split(','), 'hits': 0};
         }
 
         functionBlocks += codeBlock.replace(/([^\r\n]+)/g, '\t$1') + '\n\n';
@@ -505,7 +580,7 @@ function processFile( entry, writeMode ) {
     var constDeclStr = '';
 
     // Only do subsitutions when we are writing
-    if ( writeMode ) {
+    if ( writeMode && vb != null ) {
 
         // Remove all extra comments and multiple new lines
         remainingData = remainingData.replace(/('.*\r\n|(\r\n){2})/g, '\n').replace(/^\s*\n{2}/gm, '');
@@ -586,6 +661,9 @@ function processFile( entry, writeMode ) {
                     code = code.replace( regEx, function(match, p1, p2, p3, offset, string){
                         _what.hits += 1;
                         inUse = true;
+                        if ( _what.parameters !== undefined && _what.parameters.length > 0 ){
+                            //var __Debug = 1;
+                        }
                         return match.replace( new RegExp('\\W' + p1 + '\\W', 'gi'), function(m)
                         {
                             return m[0] + _with + m[m.length-1];
@@ -708,44 +786,48 @@ function processFile( entry, writeMode ) {
         }
     }
 
+    if ( aspx != null )
+        aspx.end();
+
+    if ( vb != null )
+       vb.end();
+
     functionMapCache[entry.class] = functionMap;
 }
 
-var searchString = process.argv[2];
-var sourcePath = path.parse( searchString );
+basePath = argv.base;
+var startPage = argv.page;
+var targetPath = argv.out;
+var rabbitHoleMode = argv['rabbit-hole'];
 
-if ( sourcePath.ext === '' )
-    searchString += '/**/*.asp';
+sourceFiles.push( path.join( basePath, startPage ) );
 
-var targetPath = process.argv[3];
+for( var i = 0 ; i < sourceFiles.length ; i++ ){
 
-glob( searchString, function( err, files ) {
+    var file = sourceFiles[i];
 
-    for( var i = 0 ; i < files.length ; i++ ){
+    var parts = path.parse(file);
+    var filePath = parts.dir;
+    var fileName = parts.name;
+    var subPath = path.relative( basePath, filePath );
 
-        var file = files[i];
+    var outPath = path.join( targetPath, subPath.toLowerCase() );
 
-        var parts = path.parse(file);
-        var filePath = parts.dir;
-        var fileName = parts.name;
-        var subPath = path.relative( sourcePath.dir, filePath );
+    var className = fileName.replace(/_/g,' ').replace(/(\b[a-z](?!\s))/g, function(x){ return x.toUpperCase();}).replace(/ /g,'');
 
-        var outPath = path.join( targetPath, subPath );
+    fileName = fileName.toLowerCase();
+    var aspxFile = path.join( outPath, fileName + '.aspx' );
+    var vbFile = path.join( outPath, fileName + '.aspx.vb' );
 
-        var className = fileName.replace(/_/g,' ').replace(/(\b[a-z](?!\s))/g, function(x){ return x.toUpperCase();}).replace(/ /g,'');
+    functionMap = {};
 
-        var aspxFile = path.join( outPath, className + '.aspx' );
-        var vbFile = path.join( outPath, className + '.aspx.vb' );
+    // First process is to create a global map of functions, constants and variables for the next step of writing out the code
+    processFile( { 'name' : fileName, 'class' : 'page' + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile }, false, false );
 
-        functionMap = {};
+    // Now write the code and handle the function mappings
+    processFile( { 'name' : fileName, 'class' : 'page' + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile }, rabbitHoleMode, true );
 
-        // First process is to create a global map of functions, constants and variables for the next step of writing out the code
-        processFile( { 'name' : fileName, 'class' : 'page' + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile }, false );
-
-        // Now write the code and handle the function mappings
-        processFile( { 'name' : fileName, 'class' : 'page' + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile }, true );
-
-    }
+};
 
 /*
     fs.readFile('template.vbproj', function (err, data) {
@@ -771,9 +853,8 @@ glob( searchString, function( err, files ) {
 
         proj.write( data );
 
-        console.log( 'all done' );
     });
 */
-});
 
+console.log( 'all done' );
 
