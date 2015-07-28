@@ -4,13 +4,13 @@ var mkdirp = require('mkdirp');
 var streamBuffers = require("stream-buffers");
 var argv = require('optimist').argv;
 var uuid = require('node-uuid');
+var isNumeric = require("isnumeric");
 
 var functionMap = {};   // Map of global functions which we need to tie back to the defining class later
 var functionMapCache = {};
 var writtenClasses = {};
 var basePath;
 var sourceFiles = [];
-
 
 String.prototype.endsWith = function (suffix) {
     return this.indexOf(suffix, this.length - suffix.length) !== -1;
@@ -34,8 +34,6 @@ String.prototype.functionReplace = function( _from, _to, _left, _right ) {
 
     t = t.replace( re, function(match, p1){
 
-        if ( _from === 'round' )
-        __debug = 1;
         if ( _left === undefined ) _left = '(';
         if ( _right === undefined ) _right = ')';
 
@@ -74,27 +72,27 @@ String.prototype.functionReplace = function( _from, _to, _left, _right ) {
 
 function sanitizeCode( code ){
 
-    code = code.replace(/Response\.Write\s+(.*(\s+&\s+vbCrLf)?)\n*/gi,'Response.Write( $1 )')
-        .replace(/Response\.Redirect\s+(.*(\s+&\s+vbCrLf)?)\n*/gi,'Response.Redirect( $1 )')
-        .replace(/Server\.Transfer\s+(.*(\s+&\s+vbCrLf)?)\n*/gi,'Server.Transfer( $1 )')
+    code = code.replace(/Response\.Write\s+(.*(\s+&\s+vbCrLf)?)(.*)/gi,'Response.Write( $1 )$2')
+        .replace(/Response\.Redirect\s+(.*(\s+&\s+vbCrLf)?)(.*)/gi,'Response.Redirect( $1 )$2')
+        .replace(/Server\.Transfer\s+(.*(\s+&\s+vbCrLf)?)(.*)/gi,'Server.Transfer( $1 )$2')
         .replace(/if\s+err\s+then*/gi,'if Err.Number <> 0 Then')
         .replace(/(\s+)set(\s+)/gi,'$1$2')
         .replace(/(\s+)wend(\s+)/gi,'$1End While$2')
         .replace(/\s{0}_$/gmi,' _')
         .replace(/^\s+\w*\s*sub\s+class_initialize/gmi,'Sub New')
         .replace(/^\s+\w*\s*sub\s+class_terminate/gmi,'Protected Overrides Sub Finalize')
-        .replace(/Server\.CreateObject\s*\((.*)\)/gi,'System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
-        .replace(/=\s*CreateObject\s*\((.*)\)/gi,'= System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
-        .replace(/(\s+|\b)null(\s*)/gi,'$1DBNull.Value$2')
+        .replace(/Server\.CreateObject\b\s*\((.*)\)/gi,'System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
+        .replace(/=\s*CreateObject\b\s*\((.*)\)/gi,'= System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
+        .replace(/(\s+|\b)null\b(\s*)/gi,'$1DBNull.Value$2')
         //.replace(/(\s+|\b)Not\s+IsObject\s*\((.*)\)/gi,'$1$2 Is Nothing ')
         //.replace(/(\s+|\b)IsObject\s*\((.*)\)/gi,'$1Not ($2 Is Nothing) ')
         //.replace(/(\s+|\b)IsNull\s*\((.*)\)/gi,'$1($2 = DBNull.Value) ')
-        .replace(/(\s+|\b)Empty(\s*)/gi,'$1Nothing$2')
-        .replace(/(\s+|\b)Timer\s*\(\s*\)?(\s*)/gi,'$1New Timer()$2')
-        .replace(/(\s+|\b)Date\s*\(\s*\)?(\s*)/gi,'$1New Date()$2')
-        .replace(/\Request\.QueryString(\s*\(.*?\))?(.*)/gi,'Request.QueryString$1.ToString()$2')
-        .replace(/\Request\.Cookies(\s*\(.*?\))?(.*)/gi,'Request.Cookies$1.ToString()$2')
-        .replace(/err\.raise(\s+\w+.*)/gi,'Err.Raise($1)');
+        .replace(/(\s+|\b)Empty\b(\s*)/gi,'$1Nothing$2')
+        .replace(/(\s+|\b)Timer\b\s*\(\s*\)?(\s*)/gi,'$1New Timer()$2')
+        .replace(/(\s+|\b)Date\b\s*\(\s*\)?(\s*)/gi,'$1New Date()$2')
+        .replace(/Request\.QueryString\b(\s*\(.*?\))?(.*)/gi,'Request.QueryString$1.ToString()$2')
+        .replace(/Request\.Cookies\b(\s*\(.*?\))?(.*)/gi,'Request.Cookies$1.ToString()$2')
+        .replace(/err\.raise\b(\s+\w+.*)/gi,'Err.Raise($1)');
 
 
     // Nice replacements
@@ -124,7 +122,7 @@ function sanitizeCode( code ){
 }
 
 function replaceInlineCode(code) {
-    var regEx = /<%[\s\r\n\t]*=\s*([\s\S]+?)[\s\r\n\t]*%>/gi;
+    var regEx = /<%[\s\n\t]*=\s*([\s\S]+?)[\s\n\t]*%>/gi;
 
     var copy =  code;
     while (( match = regEx.exec(code) ) != null) {
@@ -235,14 +233,8 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
         writtenClasses[entry.class] = true;
     }
-/*
-    functionMap = functionMapCache[entry.class];
 
-    if ( functionMap === undefined ){
-        functionMap = {};
-    }
-*/
-
+    var fileHeader;
     var codeBlocks = [];
     var functionBlocks = [];
     var includeFiles = [];
@@ -257,7 +249,16 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     var sourcePath = path.dirname( sourceFile );
     var targetPath = path.dirname(  entry.vb );
 
-    data = data.toString('utf8').replace(/_\s*\r\n(\t*|\s*)/gi,'').replace(/&"/gi,'& "').replace(/"&/gi,'" &').replace(/<%\s+=/gi,'<%=');
+    data = data.toString('utf8')
+
+    // Firstly replace all CRLF with LF (Windows)
+    data = data.replace(/\r\n/g,'\n');
+
+    // Replace any remaining CR with LF (Mac OS 9)
+    data = data.replace(/\r/g,'\n');
+
+    // Now clean the rest since we are In Unix Mode. Get rid of VBScript _ line separators, fix string concats, code markers
+    data = data.replace(/_\s*\n(\t*|\s*)/gi,'').replace(/&"/gi,'& "').replace(/"&/gi,'" &').replace(/<%\s+=/gi,'<%=');
 
     var match;
 
@@ -318,7 +319,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
         includeFiles.push( { 'file' : includeFile, 'class' : prefix + className } );
 
-        if ( argv['includes'] !== false )
+        if ( argv.includes !== false )
             processFile( { 'name' : fileName, 'class' : prefix + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile }, rabbitHoleMode, writeMode );
 
         return '';
@@ -413,7 +414,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     }
 
     // Remove classes
-    regEx = /((?!'(?:\n|\r)|(?:\n|\r))(?:\s*'.*?(?:\n|\r))*(?:public|private)?\s*(class\s*(\w+)\s*(?:'.*)?(?:\n|\r))(?:[\s\S]*?)(?:end\s+(?:class)))/gmi;
+    regEx = /((?!'(?:\n)|(?:\n))(?:\s*'.*?(?:\n))*(?:public|private)?\s*\b(class\b\s*(\w+)\s*(?:'.*)?(?:\n))(?:[\s\S]*?)(?:end\s+(?:class)))/gmi;
 
     var remainingData = data;
 
@@ -421,24 +422,24 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     while (( match = regEx.exec(data) ) != null) {
         var codeBlock = match[1];
         var className = match[3];
-        classBlocks += sanitizeCode(codeBlock) +'\n';
+        classBlocks += sanitizeCode( codeBlock ) +'\n';
         remainingData = remainingData.replace(codeBlock, "");
     }
 
     // Strip out code blocks
-   //var codeRegEx = /(?:<%|<SCRIPT\s+LANGUAGE\s*=\s*"VBScript"\s+RUNAT\s*=\s*"Server">)[\s\r\n\t]*(?=[^=|@])([\s\S]+?)[\s\r\n\t]*(?:%>\s*|<\/SCRIPT>(?!.*")\s*)/gi;
+   //var codeRegEx = /(?:<%|<SCRIPT\s+LANGUAGE\s*=\s*"VBScript"\s+RUNAT\s*=\s*"Server">)[\s\n\t]*(?=[^=|@])([\s\S]+?)[\s\n\t]*(?:%>\s*|<\/SCRIPT>(?!.*")\s*)/gi;
 
 
     if (!vbSourceFile) {
 
         // Replace RUNAT Server Tag with VBScript Marker
-        regEx = /<SCRIPT\s+LANGUAGE\s*=\s*"VBScript"\s+RUNAT\s*=\s*"Server">([\s\r\n\t]*(?=[^=|@])([\s\S]+)[\s\r\n\t]*)<\/SCRIPT>/gi;
+        regEx = /<SCRIPT\s+LANGUAGE\s*=\s*"VBScript"\s+RUNAT\s*=\s*"Server">([\s\n\t]*(?=[^=|@])([\s\S]+)[\s\n\t]*)<\/SCRIPT>/gi;
 
         remainingData = remainingData.replace(regEx, function (match, p1) {
             return '<%\n' + p1 + '%>\n';
         });
 
-        var codeRegEx = /(?:<%)[\s\r\n\t]*(?=[^=|@])([\s\S]+?)[\s\r\n\t]*(?:%>\s*)/gi;
+        var codeRegEx = /(?:<%)[\s\n\t]*(?=[^=|@])([\s\S]+?)[\s\n\t]*(?:%>\s*)/gi;
 
         data = remainingData;
         while (( match = codeRegEx.exec(data) ) != null) {
@@ -451,7 +452,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         // at the start and the end of the file so the rest of the code will function
         if (codeBlocks.length == 0) {
             var start = 0;
-            if (match = /(<%@.*%>.*\r\n)/g.exec(data)) {
+            if (match = /(<%@.*%>.*\n)/g.exec(data)) {
                 start = match.index + match[0].length;
             }
 
@@ -522,20 +523,20 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 aspx.write(replaceInlineCode(htmlChunk));
 
             os.write('\n');
-            os.write(sanitizeCode(thisBlock.code));
+            os.write( sanitizeCode( thisBlock.code ) );
 
             if (thisBlock.write !== undefined) {
-                var lines = thisBlock.code.split(/\r\n|\r|\n/);
+                var lines = thisBlock.code.split(/\n/);
                 var m = lines[lines.length - 1].match(/(\s+).*/);
                 var indent = '';
                 if (m != null && m.length > 1)
                     indent = m[1];
 
-                var htmlCode = thisBlock.write.replace(/"/g, '""'); //.replace(/\t|\r|\n/gi, '');
-                var regEx = /([^\r\n]+)/gi;
+                var htmlCode = thisBlock.write.replace(/"/g, '""'); //.replace(/\t||\n/gi, '');
+                var regEx = /([^\n]+)/gi;
 
                 while (( match = regEx.exec(htmlCode) ) != null) {
-                    var line = sanitizeCode(replaceInlineCode(match[1]));
+                    var line = sanitizeCode( replaceInlineCode(match[1]) );
 
                     if (line.length > 0)
                         os.write('\n' + indent + 'Response.Write ("' + line + '")');
@@ -556,70 +557,115 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     }
 
     // Strip out code functions and subs
-    //var regEx = /((?!'(?:\n|\r)|(?:\n|\r))(?:\s*'.*?\r\n)*(?:'\s*)?(?:public|private\s+|)(?:sub\s+(\w+)\s*\(*(.*)\)*|function\s+(\w+)\s*\((.*)\))(?:[\s\S]+?)(?:end\s+(?:sub|function))($:\r\n)*)/gi;
-    var regEx =/^\s*((?:(?:public|private)\s+)?(?:(?:sub|function)\s+((\w+)\s*\(*\s*(.*?)\s*\))?){1}(?:[\s\S]+?)(?:end\s+(?:sub|function)){1})\s+$/gmi;
+    var regEx =/^\s*((?:(public|private)\s+)?((?:sub|function)\s+(\w+)(\s*\(\s*(.*?)\s*\))?){1}(?:[\s\S]+?)(?:end\s+(?:sub|function)){1})[^\n]*$/gmi;
 
     data = remainingData;
+
+    data = data.replace( /('\s*\$Header[\s\S]+?All\sRights\sReserved.)/gi, function(m,p1){
+        fileHeader = p1;
+        return '';
+    });
+
+    remainingData = data;
 
     functionMap[entry.class] = {};  // Create a map of functions for later use
 
     var functionBlocks = '';
-
-    if ( entry.class === 'clsIncCommonMandatory')
-        __debug = 1;
-
+    var totalRemoved = 0;
     while (( match = regEx.exec(data) ) != null) {
 
         var codeBlock = match[1];
-        var fnName = match[3];
-        var parameters = match[4];
+        var visibility = match[2];
+        var fnSignature = match[3];
+        var fnName = match[4];
+        var parameters = match[6];
+
+        if ( visibility === undefined )
+            visibility = "Public";
+
+        if ( parameters === undefined )
+            parameters = '';
+
+        var endPos = match.index + match[0].length + 1;
 
         if ( argv.verbose ){
-            console.log("Found Function = > " + match[2] );
+            console.log("Found Function = > " + fnSignature );
         }
 
         var commentBlock = '';
-        if ( match[0].indexOf('\n\r\n') != 0) {
-            var i = match.index;
-            var previousLine = '';
-            while (--i > 0) {
-                if (data[i] == '\n') {
-                    if (previousLine.length > 0) {
-                        if (previousLine[0] == '\'' || previousLine[0] == '<')
-                            commentBlock = previousLine + '\n' + commentBlock;
-                        else {
-                            i += previousLine.length;
-                            break;
+
+        var i = match.index + match[0].indexOf(fnSignature);
+        var previousLine = '';
+        var maxBlankLines = 1;
+        var startPos = i
+        while (--i > 0) {
+            if (data[i] == '\n') {
+                if (previousLine.length > 0) {
+                    if (previousLine[0] == '\'' || previousLine[0] == '<')
+                        commentBlock = previousLine + '\n' + commentBlock;
+                    else {
+                        if ( commentBlock.length > 0 ){
+                            // If we ate a blank line adjust the startpos to consume the character
+                            startPos -= (1 - (maxBlankLines + 1));
                         }
+                        break;
                     }
-                    previousLine = '';
-                } else {
-                    previousLine = data[i] + previousLine;
+                }else{
+                    if ( commentBlock.length == 0 && maxBlankLines-- < -1 ){
+                        break;
+                    }
                 }
+                previousLine = '';
+            } else {
+                previousLine = data[i] + previousLine;
             }
         }
+
+        startPos -= commentBlock.length;
 
         codeBlock = commentBlock + codeBlock;
 
         if (fnName !== undefined) {
-            functionMap[entry.class][fnName] = {'name': fnName, 'parameters' : parameters.trim().length > 0 ? parameters.split(',') : undefined, 'hits': 0};
+            functionMap[entry.class][fnName] =
+            {   'name': fnName,
+                'visibility' : visibility,
+                'signature' : fnSignature,
+                'parameters' : parameters.trim().length > 0 ? parameters.split(',') : undefined,
+                'hits': 0
+            };
         }
 
-        functionBlocks += codeBlock.replace(/([^\r\n]+)/g, '\t$1') + '\n\n';
+        functionBlocks += codeBlock.replace(/([^\n]+)/g, '\t$1') + '\n\n';
 
         // Remove the comments and codeblock after the first \n
-        remainingData = remainingData.replace( codeBlock, '' );
+        var startStr = remainingData.substr(0,startPos - totalRemoved);
+        var endStr = remainingData.substr(endPos - totalRemoved);
+
+        totalRemoved += (endPos - startPos);
+
+        remainingData = startStr + endStr;
+        //remainingData = remainingData.replace( codeBlock, '' );
+
+        if ( remainingData.indexOf(fnSignature) != -1 ) {
+            console.log( 'processing error => ' + entry.in);
+            console.log( fnSignature + ", still exists in the remaining data, aborting!" );
+            process.exit(1);
+        }
     }
 
     function parseConst(code) {
         var comments = '';
 
-        if (match = /((?:\s*'.*?\r\n)+)(?=const\s+)/gi.exec(code)) {
+        if (match = /((?:\s*'.*?\n)+)(?=\bconst\b\s+)/gi.exec(code)) {
             comments = match[1];
             code = code.replace(match[1], '');
         }
 
-        if (match = /(private|public)?\s*const\s+(\w+)(?:\s*as\s*(\w+))?\s*=\s*([\S\w]+|".*")*\s*('.*)*/gi.exec(code)) {
+        // Sanity check to make sure we don't have any commented out variables
+        if ( code.search(/^\s*'.*?\bdim\b.*$/gmi) != -1 )
+            return null;
+
+        if (match = /(private|public)?\s*const\s+(\w+)(?:\s*as\s*(\w+))?\s*=\s*(".*"|[\S\w]+)*\s*('.*)*/gi.exec(code)) {
 
             var visibility = match[1];
 
@@ -632,9 +678,17 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 'var': match[2],
                 'type': match[3],
                 'value': match[4],
-                'comment': ( match[5] != undefined ? match[4] : comments ).replace(/^'/gm, '').replace(/\r/g, '').split('\n'),
+                'comment': ( match[5] != undefined ? match[5] : comments ).replace(/^'/gm, '').split('\n'),
                 'hits': 0
             };
+
+            // Prevent short consts like 'rs' making into the wild
+            if ( result.name.length < 4 ){
+                if ( writeMode )
+                    console.log( 'WARNING: Const => ' + result.name + ' is less than 4 chars, marking it Private!');
+                result.visibility = 'Private';
+            }
+
         }
         else {
             throw "unable to parse const => " + code;
@@ -644,19 +698,19 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     }
 
     function parseDim(code) {
-        var comments = '';
+        var comments;
 
-
-        if ( code.indexOf('dim g_xxx_FrameBlockingOption') != -1)
-            __debug = 1;
-
-        var start = code.search(/((public|private)\s+)?dim/i);
+        var start = code.search(/^\s*((public|private)\s+)?\bdim\b/mi);
 
         comments = code.substr( 0, start );
         code = code.substr( start );
 
+        // Sanity check to make sure we don't have any commented out variables
+         if ( code.search(/^\s*'.*?\bdim\b.*$/gmi) != -1 )
+           return null;
+
         if ( comments.trim().length > 0 ){
-            comments = comments.replace(/^'/gm, '').replace(/\r/g, '').split('\n');
+            comments = comments.replace(/^'/gm, '').split('\n');
             // If there are 2 previous blank lines before the comments, assume its junk and scrap the comment
             if ( comments.length > 2 && comments[comments.length-1].trim().length == 0 &&  comments[comments.length-2].trim().length == 0 )
                 comments = [];
@@ -665,12 +719,11 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
 
         if (match = /('.*)/gi.exec(code)) {
-            comments = match[1].replace(/^'/gm, '').replace(/\r/g, '').split('\n');
+            comments = match[1].replace(/^'/gm, '').split('\n');
                 code = code.replace(match[1], '');
         }
 
-        code = code.replace(/[\r\n]/g,'');
-        //var definitions = code.split(',');
+        code = code.replace(/[\n]/g,'');
 
         var results = [];
 
@@ -685,15 +738,12 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             visibility = "Public";
 
         code = code.replace(/^dim\s+/i, '');
-        var regEx = /(\w+(?:\(.*?\))*)\s*:*\s*(\w+\s*=\s*(.*|".*"))*\s*('.*)*/gi;
+        var regEx = /(\w+(?:\s*\(.*?\))*)\s*:*\s*(\w+\s*=\s*(.*|".*"))*\s*('.*)*/gi;
 
         while (( match = regEx.exec(code)) != null) {
             var thisVar = match[1].replace('g_', '').replace(/^x+_/gmi, '').replace(/_x+$/gmi, '').replace(/_/g, ' ').replace(/(\b[a-z](?!\s))/g, function (x) {
                 return x.toUpperCase();
             }).replace(/ /g, '');
-
-            if ( match[1] ==='end')
-                __debug = 1;
 
             var result = {
                 'visibility': visibility,
@@ -704,6 +754,19 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 'comment': ( results.length == 0 ? comments : undefined ),
                 'hits': 0
             };
+
+            // Prevent short variables like 'rs' making into the wild
+            if ( result.name.length < 4 ){
+                if (isNumeric(entry.name)){
+                    entry.name = '_' + entry.name;
+                    if ( writeMode )
+                        console.log( 'BIG WARNING: Variable => ' + result.name + ' has a numeric name!. I\'ll rename with and underscore to prevent mass updates');
+                }
+                if ( writeMode )
+                    console.log( 'WARNING: Variable => ' + result.name + ' is less than 4 chars, marking it Private!');
+                result.visibility = 'Private';
+            }
+
 
             results.push(result);
         }
@@ -716,7 +779,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     }
 
     // Strip out all DIM and CONST declarations
-    regEx = /^(((?:'.*?\r\n){0,}?)(?:private|public)?\s*(const|dim)+\s+(?:[\s\S]+?))\s*$/gmi;
+    regEx = /^(((?:'.*?\n){0,}?)(?:private|public)?\s*\b(const|dim)+\b\s+(?:[\s\S]+?))\s*$/gmi;
 
     data = remainingData;
 
@@ -725,10 +788,10 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     var variableDecls = [];
 
     while (( match = regEx.exec(data) ) != null) {
-        var codeBlock = match[0];//.replace( /\r?\n|\r/g, '' );
+        var codeBlock = match[0];
 
         var endPos = match[0].length;
-        if ( codeBlock.replace('\r','').trim().endsWith(',')){
+        if ( codeBlock.replace('','').trim().endsWith(',')){
             codeBlock += '\n';
             var offset = match.index + match[0].length + 1;
             var pos;
@@ -736,9 +799,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 var nextLine = data.substr( offset, pos - offset );
                 offset += nextLine.length + 1;
                 endPos = offset;
-                //nextLine = nextLine.replace('\r','');
+                //nextLine = nextLine.replace('','');
                 codeBlock += nextLine + '\n';
-                if ( !nextLine.replace('\r','').trim().endsWith(',') )
+                if ( !nextLine.replace('','').trim().endsWith(',') )
                     break;
             }
         }
@@ -747,10 +810,18 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
         switch (match[3].toLowerCase()) {
             case 'dim':
-                variableDecls.push(parseDim(codeBlock));
+                var variableDecl = parseDim(codeBlock);
+                if (variableDecl != null )
+                    variableDecls.push(variableDecl);
+                else
+                    globalBlocks += '\t' + codeBlock;
                 break;
             case 'const':
-                constDecls.push(parseConst(codeBlock));
+                var constDecl = parseConst(codeBlock);
+                if (constDecl != null)
+                    constDecls.push(constDecl);
+                else
+                    globalBlocks += '\t' + codeBlock;
                 break;
             default:
                 globalBlocks += '\t' + codeBlock;
@@ -766,7 +837,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     if ( writeMode && vb != null ) {
 
         // Remove all extra comments and multiple new lines
-        remainingData = remainingData.replace(/('.*\r\n|(\r\n){2})/g, '\n').replace(/^\s*\n{2}/gm, '');
+        remainingData = remainingData.replace(/('.*\n(\n){2})/g, '\n').replace(/^\s*\n{2}/gm, '');
 
         function formatCommentBlock(data) {
             var commentBlock = '';
@@ -840,9 +911,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
                     code = code.replace( regEx, function(m, p1, p2, p3, offset, string){
 
-                        if (m.indexOf('GetConnectionStringFromMasterDatabase') != -1 &&  m.indexOf('meaning') != -1)
-                            __debug = 1;
-
                         // I have no idea why the above regex is ignoring
                         if ( p1.match(/\b(sub|function)\b/gi) != null && p2 === undefined ){
                             return m;
@@ -853,13 +921,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         }
 
                         p1 = p3;
-
-                        if ( _with.indexOf ('.End') != -1 )
-                            _debug =1 ;
-
-                        var strLeft = p1.split('.')[0];
-                        if ( strLeft=== 'Me' || strLeft == 'String' )
-                            return m;
 
                         // Check for being in comments or Strings
                         if ( m.indexOf('\'')!= -1 ){
@@ -882,9 +943,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         }
 
                         if ( m.indexOf('"')!= -1 ){
-                            if (m.indexOf('AppendUserMessagesToDoc Start') != -1)
-                                __debug = 1;
-
                             var r = new RegExp( '(["\'])(?:\\b(' + _what.name + ')\\b.*?)?\\1','gi' );
                             if ( ( (m2 = m.match(r))) != null ) {
                                 if ( m2[0].indexOf(_what.name) != -1)
@@ -897,9 +955,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         inUse = true;
 
                         if ( _what.parameters !== undefined && _what.parameters.length > 0 ){
-
-                            if ( p1 === 'DisablePageTimings')
-                                __debug =1 ;
                             if (  m.match( new RegExp( p1 + '\\s*\\(') ) == null ){
                                 m = m.replace( new RegExp('^(.*)' + p1 + '\\s+(?!\\s*=)(.+?)(?=(?:$))', 'm'), function(m2, p2, p3){
                                     return p2 + p1 + '( ' + p3 + ' )';
@@ -920,12 +975,16 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                                 var _with = varName + '.' + functionMap[cls][name][i][x].var;
                                 if (cls === entry.class)
                                     _with = functionMap[cls][name][i][x].var;
+                                if ( functionMap[cls][name][i][x].visibility.toLowerCase() === 'private')
+                                    continue;
                                 doSubstitution('var', functionMap[cls][name][i][x], _with);
                             }
                         }
                     } else if (name === '_Constants') {
                         for (var i = 0; i < functionMap[cls][name].length; i++) {
                             var _with = cls + '.' + functionMap[cls][name][i].var;
+                            if ( functionMap[cls][name][i].visibility.toLowerCase() === 'private')
+                                continue;
                             if (cls === entry.class)
                                 _with = functionMap[cls][name][i].var;
                             doSubstitution('const', functionMap[cls][name][i], _with);
@@ -936,6 +995,8 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                             _with = name;
                         if ( functionMap[cls][name].type === 'class')
                             _with = cls + '.' + name
+                        if ( functionMap[cls][name].visibility.toLowerCase() === 'private')
+                            continue;
                         doSubstitution('function', functionMap[cls][name], _with);
                     }
                 }
@@ -966,7 +1027,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
         for (var i = 0; i < usedModules.length; i++) {
             dimModules += '\tPrivate ' + usedModules[i].var + ' As ' + usedModules[i].class + '\n';
-            newModules += '\t\t' + usedModules[i].var + ' = new ' + usedModules[i].class + '( Server, Application, Request, Response )\n';
+            newModules += '\t\t' + usedModules[i].var + ' = new ' + usedModules[i].class + '( ' + (aspx != null ? 'Me' : 'Me.Page' ) + ' )\n';
         }
 
         if (aspx != null) {
@@ -975,30 +1036,33 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             vb.write('\n');
         } else {
             vb.write('Public Class ' + entry.class + '\n\n');
-            vb.write('\t\'--------- Start Page Objects ---------\n');
-            vb.write('\tPrivate Server As System.Web.HttpServerUtility\n');
-            vb.write('\tPrivate Application As System.Web.HttpApplicationState\n');
-            vb.write('\tPrivate Request As System.Web.HttpRequest\n');
-            vb.write('\tPrivate Response As System.Web.HttpResponse\n');
-            vb.write('\t\'--------- End Page Objects ---------\n\n');
+            vb.write('\tInherits PageClass' + '\n')
+
             vb.write('\n');
         }
+
+        if ( fileHeader !== undefined){
+            vb.write('\t\'--------- Start Original Header ---------\n');
+            vb.write( fileHeader + '\n' );
+            vb.write('\t\'--------- End Original Header ---------\n\n');
+        }
+
         if (constDeclStr.length > 0) {
-            vb.write('\t\'--------- Start Globals Constants ---------\n');
+            vb.write('\t\'--------- Start Global Constants ---------\n');
             vb.write(constDeclStr);
-            vb.write('\t\'--------- End Globals Constants ---------\n\n');
+            vb.write('\t\'--------- End Global Constants ---------\n\n');
         }
 
         if (varDelcStr.length > 0) {
-            vb.write('\t\'--------- Start Globals Variables ---------\n');
+            vb.write('\t\'--------- Start Global Variables ---------\n');
             vb.write(varDelcStr);
-            vb.write('\t\'--------- End Globals Variables ---------\n\n');
+            vb.write('\t\'--------- End Global Variables ---------\n\n');
         }
 
         if (dimModules.length > 0) {
-            vb.write('\t\'--------- Start Modules used ---------\n');
+            vb.write('\t\'--------- Start Used Modules ---------\n');
             vb.write(dimModules);
-            vb.write('\t\'--------- End Modules used ---------\n\n');
+            vb.write('\t\'--------- End Used Modules ---------\n\n');
         }
 
         vb.write(globalBlocks);
@@ -1021,12 +1085,15 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             vb.write('\n\t\' Sub is called when the class is instantiated ');
             vb.write('\n\t\'');
             vb.write('\n\t\'************************************************');
-            vb.write('\n\tSub New( Server As System.Web.HttpServerUtility, Application As System.Web.HttpApplicationState, Request As System.Web.HttpRequest, Response As System.Web.HttpResponse )\n\n');
+            vb.write('\n\tSub New( Page As System.Web.UI.Page )\n\n');
+            vb.write('\t\tMyBase.New( Page )\n\n');
+            /*
             vb.write('\t\t\' Store our page variables fore use in the class\n' );
             vb.write('\t\tMe.Server = Server\n');
             vb.write('\t\tMe.Application = Application\n');
             vb.write('\t\tMe.Request = Request\n');
             vb.write('\t\tMe.Response = Response\n\n');
+            */
         }
         if (newModules.length > 0) {
             vb.write('\n');
@@ -1035,7 +1102,10 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             vb.write('\t\'--------- End Module Creation ---------\n');
             vb.write('\n');
         }
-        vb.write(remainingData.replace(/Option\s+Explicit/gi, '').replace(/([^\r\n]+)/g, '\t\t$1').replace(/('.*\r\n|(\r\n){2})/g, '\n').replace(/^\s*\n{2}/gm, '') + '\n');
+
+        remainingData = remainingData.replace(/Option\s+Explicit/gi, '').replace(/([^\n]+)/g, '\t\t$1').replace(/('.*\n(\n){2})/g, '\n').replace(/^\s*\n{2}/gm, '');
+
+        vb.write( remainingData + '\n');
 
         vb.write('\tEnd Sub\n');
         vb.write('\n');
@@ -1052,7 +1122,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     if ( vb != null )
        vb.end();
 
-    functionMapCache[entry.class] = functionMap;
 }
 
 basePath = argv.base;
@@ -1060,11 +1129,23 @@ var startPage = argv.page;
 var targetPath = argv.out;
 var rabbitHoleMode = argv['rabbit-hole'];
 
+var functionMapFile = path.join( targetPath, "function_map.json" );
+
+// If hte function map cache exists, read it!
+if ( fs.existsSync(functionMapFile) ) {
+    //functionMapCache = JSON.parse(fs.readFileSync(functionMapFile));
+}
+
 sourceFiles.push( 'vb6.vb' );
 
 sourceFiles.push( path.join( basePath, startPage ) );
 
+console.log ("started processing at => " + new Date().toLocaleTimeString());
+
 for( var i = 0 ; i < sourceFiles.length ; i++ ){
+
+    //if ( i == 0 )
+    //   continue;
 
     var file = sourceFiles[i];
 
@@ -1091,20 +1172,32 @@ for( var i = 0 ; i < sourceFiles.length ; i++ ){
         entry = { 'name' : fileName, 'class' : 'page' + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile };
     }
 
+    var cacheKey = path.join( path.relative( targetPath, path.parse(entry.vb).dir ), fileName);
+
+    if ( functionMapCache[cacheKey] != undefined ){
+        functionMap = JSON.parse( JSON.stringify( functionMapCache[cacheKey] ) );
+    }else{
+        functionMap = {};
+        // We alway include our vb6 legacy stuff
+        if ( functionMapCache.vb6 != undefined )
+            functionMap = JSON.parse( JSON.stringify( functionMapCache.vb6 ) );
+    }
+
     // First process is to create a global map of functions, constants and variables for the next step of writing out the code
     processFile( entry, false, false );
 
     // Now write the code and handle the function mappings
     processFile( entry, rabbitHoleMode, true );
 
+    functionMapCache[cacheKey] = functionMap;
 };
 
-// Write out our deprecated vb6 functions
-/*
-var vbfile = path.join( targetPath, "vb6.vb" );
+fs.writeFileSync( functionMapFile, JSON.stringify( functionMapCache, null, '  ' ) );
 
-fs.writeFileSync( vbfile, fs.readFileSync('vb6.vb') );
-*/
+console.log ("finished processing at => " + new Date().toLocaleTimeString());
+
+// Write out our base class
+fs.writeFileSync( path.join( targetPath, "PageClass.vb" ), fs.readFileSync('PageClass.vb') );
 
 /*
     fs.readFile('template.vbproj', function (err, data) {

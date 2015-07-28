@@ -19,6 +19,7 @@
   "dependencies": {
     "forallasync": "^1.0.2",
     "glob": "^5.0.13",
+    "isnumeric": "^0.2.0",
     "mkdirp": "^0.5.1",
     "node-uuid": "^1.4.3",
     "optimist": "^0.6.1",
