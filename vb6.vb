@@ -75,21 +75,31 @@ Public Const adModeShareDenyNone As Integer = 16     ' Allows others to open a c
 Public Const adModeRecursive As Integer = 4194304     ' Used with adModeShareDenyNone, adModeShareDenyWrite, or adModeShareDenyRead to set permissions on all sub-records of the current Record.
 
 <Obsolete("VB6 IsNull is obsoleted")>
-Function IsNull(v)
+Shared Function IsNull(v)
     If (TypeOf v Is String) Then
-        IsNull = String.IsNullOrEmpty(v)
+        Return String.IsNullOrEmpty(v)
     End If
-    IsNull = (v Is Nothing)
+    Return (v Is Nothing)
 End Function
 
 <Obsolete("VB6 IsObject is obsoleted")>
-Function IsObject(v)
-    IsObject = Not( v Is Nothing )
+Shared Function IsObject(v)
+    Return ( Not( v Is Nothing ) )
+End Function
+
+<Obsolete("VB6 IsEmpty is obsoleted")>
+Shared Function IsEmpty(v)
+    Return String.IsNullOrEmpty(v)
+End Function
+
+<Obsolete("VB6 Consider using Native .NET Classes for performance increase")>
+Shared Function CreateObject(v)
+    Return System.Activator.CreateInstance(System.Type.GetTypeFromProgID( v ))
 End Function
 
 <Obsolete("VB6 CCur is obsoleted")>
-Function CCur(v)
-    CCur = v.ToString("c2")
+Shared Function CCur(v)
+    Return v.ToString("c2")
 End Function
 
 ' Wrapper for RegExp

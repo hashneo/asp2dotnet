@@ -294,7 +294,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                     writtenFiles.push(entry.vb);
                 }
             }else{
-                console.log('writing vb to a stream');
+                console.log('writing class => ' + entry.class + ' to a temp stream');
                 vb = new streamBuffers.WritableStreamBuffer({
                     initialSize: (100 * 1024),      // start as 100 kilobytes.
                     incrementAmount: (10 * 1024)    // grow by 10 kilobytes each time buffer overflows.
@@ -549,7 +549,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 //************************************************************
                 function doSubstitution(_type, _what, _with, onMatch) {
 
-                    var regEx
+                    var regEx;
 
                     //regEx = new RegExp('^\\n?\\s*((?=(?:public|private)?\\s*(sub|function))|.*?)((?:\\w+\\.)?\\b' + _what.name + '\\b).*$', 'gmi' )
 
@@ -609,7 +609,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
                         if ( _what.parameters !== undefined && _what.parameters.length > 0 ){
                             if (  m.match( new RegExp( p1 + '\\s*\\(') ) == null ){
-                                m = m.replace( new RegExp('^(.*)' + p1 + '\\s*(?!\\s*=)(.+?)(?=(?:$))', 'm'), function(m2, p2, p3){
+                                m = m.replace( new RegExp('^(.*)\\b' + p1 + '\\b\\s*(?!\\s*=)(.+?)(?=(?:$))', 'm'), function(m2, p2, p3){
                                     return p2 + p1 + '( ' + p3 + ' )';
                                 });
                             }
@@ -644,6 +644,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 }
 
                 for (var name in functionMap[cls]) {
+
+                    if ( thisFunction.name === 'OTRunProcReturnCodeWithTimeout' && name === 'OTRunProcReturnCode')
+                        __Debug = 1;
 
                     if ( isReservedName(name) || ( thisFunction !== undefined && name.toLowerCase() === thisFunction.name.toLowerCase() ) )
                         continue;
@@ -680,25 +683,14 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                                 return true;
                             });
                         });
-/*
-                    } else if (name === '_Constants') {
-                        for (var i = 0; i < functionMap[cls][name].length; i++) {
-                            var _with = cls + '.' + functionMap[cls][name][i].var;
-                            if ( functionMap[cls][name][i].visibility.toLowerCase() === 'private')
-                                continue;
-                            if (cls === entry.class)
-                                _with = functionMap[cls][name][i].var;
-                            doSubstitution('const', functionMap[cls][name][i], _with, function(match){
-                                return true;
-                            });
-                        }
-                    } else if (name === '_Properties') {
-*/
+
                     } else {
                         var _with = varName + '.' + name;
                         if (cls === entry.class)
                             _with = 'Me.' + name;
                         if ( functionMap[cls][name].type === 'class')
+                            _with = cls + '.' + name
+                        if ( functionMap[cls][name].global )
                             _with = cls + '.' + name
                         if ( functionMap[cls][name].visibility.toLowerCase() === 'private')
                             continue;
@@ -851,7 +843,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             }
 
             if (fileHeader !== undefined) {
-                vb.write('\t#Region "Start Original Header"\n');
+                vb.write('\t#Region "Original Header"\n');
                 vb.write(fileHeader + '\n');
                 vb.write('\t#End Region\n\n');
             }
@@ -876,7 +868,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
 
             if (dimModules.length > 0) {
-                vb.write('\t#Region "Used Modules\n');
+                vb.write('\t#Region "Used Modules"\n');
                 vb.write(dimModules);
                 vb.write('\t#End Region\n\n');
             }
@@ -1031,40 +1023,45 @@ fs.writeFileSync( path.join( targetPath, "AspPage.vb" ), fs.readFileSync('AspPag
 writtenFiles.push(path.join( targetPath, "PageClass.vb" ));
 writtenFiles.push(path.join( targetPath, "AspPage.vb" ));
 
-// Write out the project
-var data = fs.readFileSync('template.vbproj');
+var targetProjFile = path.join(targetPath, argv.project + '.vbproj');
 
-data = data.toString('utf8');
+if ( argv.overwrite || !fs.existsSync(targetProjFile) ) {
 
-data = data.replace('%GUID%', uuid.v4() );
+    console.log("Creating VB Project File => " + targetProjFile )
+    // Write out the project
+    var data = fs.readFileSync('template.vbproj');
 
-var files = [];
-var codeFiles = [];
+    data = data.toString('utf8');
 
-for ( var i = 0 ; i < writtenFiles.length ; i++ ) {
-    var f = writtenFiles[i];
-    var parts = path.parse(f);
-    var s = path.relative( targetPath, f );
-    var dosPath = s.replace(/\//g,'\\');
+    data = data.replace('%GUID%', uuid.v4());
 
-    if ( parts.ext === '.aspx' ){
-        files.push( '<Content Include="' + dosPath + '" />' );
-        codeFiles.push( '<Compile Include="' + dosPath + '.vb"><DependentUpon>' + dosPath + '</DependentUpon><SubType>ASPXCodeBehind</SubType></Compile>' );
+    var files = [];
+    var codeFiles = [];
+
+    for (var i = 0; i < writtenFiles.length; i++) {
+        var f = writtenFiles[i];
+        var parts = path.parse(f);
+        var s = path.relative(targetPath, f);
+        var dosPath = s.replace(/\//g, '\\');
+
+        if (parts.ext === '.aspx') {
+            files.push('<Content Include="' + dosPath + '" />');
+            codeFiles.push('<Compile Include="' + dosPath + '.vb"><DependentUpon>' + dosPath + '</DependentUpon><SubType>ASPXCodeBehind</SubType></Compile>');
+        }
+        else {
+            if (!parts.base.endsWith('.aspx.vb'))
+                codeFiles.push('<Compile Include="' + dosPath + '"></Compile>');
+        }
+
     }
-    else{
-        if ( !parts.base.endsWith('.aspx.vb') )
-            codeFiles.push( '<Compile Include="' + dosPath + '"></Compile>' );
-    }
 
+    data = data.replace('%ITEMS%', files.join('\n'));
+    data = data.replace('%COMPILES%', codeFiles.join('\n'));
+
+    var proj = fs.createWriteStream(targetProjFile);
+
+    proj.write(data);
 }
-
-data = data.replace('%ITEMS%', files.join('\n'));
-data = data.replace('%COMPILES%', codeFiles.join('\n'));
-
-var proj = fs.createWriteStream(path.join( targetPath,  argv.project + '.vbproj' ) );
-
-proj.write( data );
-
 
 
 console.log( 'all done' );

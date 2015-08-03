@@ -6,7 +6,7 @@ FunctrionsParser = function(){
     this.parse = function(data, verbose){
 
         // Strip out code functions and subs
-        var regEx =/^\s*(((?:(public|protected|private)\s+)?(?:overrides\s+)?(sub|function)\s+(\w+)(\s*\(\s*(.*?)\s*\))?){1}([\s\S]+?)(?:end\s+(?:sub|function)){1})[^\n]*$/gmi;
+        var regEx =/^\s*(((?:(public|protected|private)\s+)?(shared\s+)?(?:(?:overrides)\s+)?(sub|function)\s+(\w+)(\s*\(\s*(.*?)\s*\))?){1}([\s\S]+?)(?:end\s+(?:sub|function)){1})[^\n]*$/gmi;
         var match;
 
         var remainingData = data;
@@ -20,10 +20,11 @@ FunctrionsParser = function(){
 
             var fnSignature = match[2];
             var visibility = match[3];
-            var type = match[4];
-            var fnName = match[5];
-            var parameters = match[7];
-            var codeBlock = match[8];
+            var global = match[4] === undefined ? false : true ;
+            var type = match[5];
+            var fnName = match[6];
+            var parameters = match[8];
+            var codeBlock = match[9];
 
             if ( visibility === undefined )
                 visibility = "Public";
@@ -88,6 +89,7 @@ FunctrionsParser = function(){
                 {   'name': fnName,
                     'type' : type,
                     'visibility' : visibility,
+                    'global' : global,
                     'signature' : fnSignature,
                     'parameters' : parameters.trim().length > 0 ? parameters.split(',') : undefined,
                     'hits': 0

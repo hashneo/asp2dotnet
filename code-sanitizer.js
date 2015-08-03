@@ -12,8 +12,8 @@ CodeSanitizer = function(){
             .replace(/\s{0}_$/gmi,' _')
             //.replace(/^\s*\w*\s*sub\s+class_initialize/gmi,'Sub vb6_Class_Initialize')
             //.replace(/^\s*\w*\s*sub\s+class_terminate/gmi,'Sub vb6_Class_Terminate')
-            .replace(/Server\.CreateObject\b\s*\((.*)\)/gi,'System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
-            .replace(/=\s*CreateObject\b\s*\((.*)\)/gi,'= System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
+            .replace(/(\s+|\b)Server\.CreateObject\b\s*\((.*?)\)/gi,'$1CreateObject( $2 )')
+            //.replace(/=\s*CreateObject\b\s*\((.*)\)/gi,'= System.Activator.CreateInstance(System.Type.GetTypeFromProgID( $1 ))')
             .replace(/(\s+|\b)null\b(\s*)/gi,'$1DBNull.Value$2')
             //.replace(/(\s+|\b)Not\s+IsObject\s*\((.*)\)/gi,'$1$2 Is Nothing ')
             //.replace(/(\s+|\b)IsObject\s*\((.*)\)/gi,'$1Not ($2 Is Nothing) ')
@@ -23,7 +23,9 @@ CodeSanitizer = function(){
             .replace(/(\s+|\b)Date\b\s*\(\s*\)?(\s*)/gi,'$1New Date()$2')
             .replace(/Request\.QueryString\b(\s*\(.*?\))?(.*)/gi,'Request.QueryString$1.ToString()$2')
             .replace(/Request\.Cookies\b(\s*\(.*?\))?(.*)/gi,'Request.Cookies$1.ToString()$2')
-            .replace(/err\.raise\b(\s+\w+.*)/gi,'Err.Raise($1)');
+            .replace(/Response\.Cookies\b(\s*\(.*?\))\s*=(.*)/gi,'Response.Cookies$1.Value = $2')
+            .replace(/err\.raise\b(\s+\w+.*)/gi,'Err.Raise($1)')
+            .replace(/(\s+|\b)lenb\b(\s*)/gi,'len')
 
 
         // Nice replacements
