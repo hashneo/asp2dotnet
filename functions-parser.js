@@ -1,0 +1,133 @@
+FunctrionsParser = function(){
+
+    var sanitizer = require('./code-sanitizer');
+    var variablesParser = require('./variables-parser');
+
+    this.parse = function(data, verbose){
+
+        // Strip out code functions and subs
+        var regEx =/^\s*(((?:(public|protected|private)\s+)?(?:overrides\s+)?(sub|function)\s+(\w+)(\s*\(\s*(.*?)\s*\))?){1}([\s\S]+?)(?:end\s+(?:sub|function)){1})[^\n]*$/gmi;
+        var match;
+
+        var remainingData = data;
+
+        var functionMap = {};  // Create a map of functions for later use
+
+        var functionBlocks = [];
+
+        var totalRemoved = 0;
+        while (( match = regEx.exec(data) ) != null) {
+
+            var fnSignature = match[2];
+            var visibility = match[3];
+            var type = match[4];
+            var fnName = match[5];
+            var parameters = match[7];
+            var codeBlock = match[8];
+
+            if ( visibility === undefined )
+                visibility = "Public";
+
+            if ( parameters === undefined )
+                parameters = '';
+
+            var endPos = match.index + match[0].length + 1;
+
+            if ( verbose ){
+                console.log("Found Function = > " + fnSignature );
+            }
+
+            var commentBlock = '';
+
+            var offset = match[0].indexOf(fnSignature);
+
+            var i = match.index + offset;
+            var previousLine = '';
+            var maxBlankLines = 1;
+            var startPos = i
+            while (--i >= 0) {
+                if (data[i] == '\n') {
+                    if (previousLine.replace(/\s*/,'').length > 0) {
+                        if (previousLine.trim()[0] == '\'' || previousLine.trim()[0] == '<')
+                            commentBlock = previousLine + '\n' + commentBlock;
+                        else {
+                            if ( commentBlock.length > 0 ){
+                                // If we ate a blank line adjust the startpos to consume the character
+                                startPos -= (1 - (maxBlankLines + 1));
+                            }
+                            break;
+                        }
+                    }else{
+                        if ( ( commentBlock.length == 0 && maxBlankLines-- < -1 ) || commentBlock.length > 0 ){
+                            break;
+                        }
+                    }
+                    previousLine = '';
+                } else {
+                    previousLine = data[i] + previousLine;
+                }
+            }
+
+            startPos -= (commentBlock.length + offset);
+
+
+            if ( fnName.toLowerCase() === 'class_initialize' ){
+                fnName = 'vb6_Class_Initialize';
+                fnSignature = fnSignature.replace(/class_initialize/gi,fnName);
+            }
+
+            if ( fnName.toLowerCase() === 'class_terminate' ){
+                fnName = 'vb6_Class_Terminate';
+                fnSignature = fnSignature.replace(/class_terminate/gi,fnName);
+            }
+
+            //codeBlock =  + codeBlock;
+
+            if (fnName !== undefined) {
+                functionMap[fnName] =
+                {   'name': fnName,
+                    'type' : type,
+                    'visibility' : visibility,
+                    'signature' : fnSignature,
+                    'parameters' : parameters.trim().length > 0 ? parameters.split(',') : undefined,
+                    'hits': 0
+                };
+            }
+
+            var thisBlock = {
+                'function' : functionMap[fnName],
+                'comment' : commentBlock,
+                'code' : sanitizer.clean( codeBlock.replace(/([^\n]+)/g, '\t$1') )
+            };
+
+            var result = variablesParser.parse( thisBlock.code );
+
+            thisBlock['vars'] = result.vars;
+
+            functionBlocks.push( thisBlock );
+
+            // Remove the comments and codeblock after the first \n
+            var startStr = remainingData.substr(0,startPos - totalRemoved);
+            var endStr = remainingData.substr(endPos - totalRemoved);
+
+            totalRemoved += (endPos - startPos);
+
+            remainingData = startStr + endStr;
+
+            if ( remainingData.indexOf(fnSignature) != -1 ) {
+                //console.log( 'processing error => ' + entry.in);
+                console.log( fnSignature + ", still exists in the remaining data, aborting!" );
+                throw "";
+            }
+        }
+
+        return{
+            'data' : remainingData.replace(/\n\n/gi, '\n').trim(),
+            'map' : functionMap,
+            'blocks' : functionBlocks
+        }
+
+    }
+};
+
+exports = module.exports = new FunctrionsParser();

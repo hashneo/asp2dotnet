@@ -76,7 +76,10 @@ Public Const adModeRecursive As Integer = 4194304     ' Used with adModeShareDen
 
 <Obsolete("VB6 IsNull is obsoleted")>
 Function IsNull(v)
-    IsNull = (v = DBNull.Value)
+    If (TypeOf v Is String) Then
+        IsNull = String.IsNullOrEmpty(v)
+    End If
+    IsNull = (v Is Nothing)
 End Function
 
 <Obsolete("VB6 IsObject is obsoleted")>

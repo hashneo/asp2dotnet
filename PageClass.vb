@@ -1,6 +1,11 @@
 Public Class PageClass
 
-	Protected ReadOnly Property Page As System.Web.UI.Page
+	Private _Page As AspPage
+	Public ReadOnly Property Page As AspPage
+		Get
+			Return _Page
+		End Get
+	End Property
 
 	Protected ReadOnly Property Server As System.Web.HttpServerUtility
 		Get
@@ -26,7 +31,11 @@ Public Class PageClass
 		End Get
 	End Property
 
-	Protected Sub New(Page As System.Web.UI.Page)
+	Public Function createInstance(What As System.Type) As PageClass
+		Return Page.createInstance( What )
+	End Function
+
+	Protected Sub New(Page As AspPage)
 		Me._Page = Page
 	End Sub
 
