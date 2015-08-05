@@ -15,10 +15,15 @@ PropertiesParser = function(){
         while (( match = regEx.exec(data) ) != null) {
             var codeBlock = match[0];
 
+            var visibility = match[4];
+
+            if (visibility === undefined)
+                visibility = "Public";
+
             var property =
             {
                 'comments' : ( match[2] != undefined ? match[2].replace(/\n\n/gi,'\n').replace(/^'/gm, '').split('\n') : undefined ),
-                'visibility' : match[4],
+                'visibility' : visibility,
                 'type' : match[5].toLowerCase(), // get or let
                 'name' : match[6],
                 'code' : sanitizer.clean(match[8]),

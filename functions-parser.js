@@ -1,4 +1,4 @@
-FunctrionsParser = function(){
+FunctionsParser = function(){
 
     var sanitizer = require('./code-sanitizer');
     var variablesParser = require('./variables-parser');
@@ -132,4 +132,4 @@ FunctrionsParser = function(){
     }
 };
 
-exports = module.exports = new FunctrionsParser();
+exports = module.exports = new FunctionsParser();

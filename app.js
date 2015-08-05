@@ -239,6 +239,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             if (argv.includes !== false)
                 processFile({
                     'type' : 'include',
+                    'level' : entry.level + 1,
                     'name': fileName,
                     'class': prefix + className,
                     'relative': subPath,
@@ -362,7 +363,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             __debug = 1;
 
         if ( entry.name !== 'vb6'){
-            classData = processFile( { 'type' : 'class', 'name' : fileName, 'class' : className,  'data' : '<%\n\n' + classData + '\n\n%>' }, rabbitHoleMode, writeMode );
+            classData = processFile( { 'type' : 'class', 'level' : entry.level, 'name' : fileName, 'class' : className,  'data' : '<%\n\n' + classData + '\n\n%>' }, rabbitHoleMode, writeMode );
         }else{
             classData = codeBlock;
         }
@@ -440,6 +441,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     var result = functionsParser.parse( remainingData, argv.verbose );
     var functionBlocks = result.blocks;
     functionMap[entry.class] = result.map;
+    functionMap[entry.class]['_Level'] = entry.level;
     functionMap[entry.class]['_Type'] = entry.type;
 
     // Next we remove all Properties (GET/LET)
@@ -533,6 +535,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             for (var cls in functionMap){
                 if ( cls === entry.name || cls.indexOf('page') == 0 )
                     continue;
+               // if ( functionMap[cls]['_Level'] > entry.level )
+               //     continue;
+
                 includeClasses.push( cls );
             }
 
@@ -623,11 +628,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 function isReservedName(n){
                     n = n.toLowerCase();
 
-                    if ( n === 'new')
-                        return true;
-
-                    if ( n === '_type')
-                        return true;
+                    if ( n === 'new') return true;
+                    if ( n === '_type') return true;
+                    if ( n === '_level') return true;
 
                     return false;
                 }
@@ -746,6 +749,8 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             if ( classProperty.get !== undefined ){
                 var theGet = classProperty.get;
+                if ( theGet.visibility === undefined )
+                    debugger;
                 getStr = (theGet.visibility.toLowerCase() !== 'public' ? theGet.visibility : '') + ' Get' +
                     processFunctionMap(theGet) +
                     'End Get\n'
@@ -783,7 +788,8 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         for ( var i = 0 ; i < functionBlocks.length ; i++ ){
             var functionBlock = functionBlocks[i];
             var code = vbSourceFile ? functionBlock.code : processFunctionMap(functionBlock);
-            functionBlocksCode += functionBlock.function.signature + '\n' +
+            functionBlocksCode += functionBlock.comment +
+                                  functionBlock.function.signature + '\n' +
                                   code.trim() + '\n' +
                                   'End ' +  functionBlock.function.type + ' \n\n';
         }
@@ -939,6 +945,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
     if ( writeMode && entry.data !== undefined ){
         data = vb.getContents();
+
+      //  if ( entry.type === 'class')
+      //      functionMap[entry.class] == undefined;
         return data.toString('utf8');
     }
 
@@ -991,6 +1000,8 @@ for( var i = 0 ; i < sourceFiles.length ; i++ ){
 
         entry = { 'type' : 'page', 'name' : fileName, 'class' : 'page' + className, 'relative' : subPath, 'in' : file, 'aspx' : aspxFile, 'vb' : vbFile };
     }
+
+    entry['level'] = 0;
 
     var cacheKey = path.join( path.relative( targetPath, path.parse(entry.vb).dir ), fileName);
 
@@ -1057,6 +1068,7 @@ if ( argv.overwrite || !fs.existsSync(targetProjFile) ) {
 
     data = data.replace('%ITEMS%', files.join('\n'));
     data = data.replace('%COMPILES%', codeFiles.join('\n'));
+    data = data.replace('%NAMESPACE%', argv.project);
 
     var proj = fs.createWriteStream(targetProjFile);
 
