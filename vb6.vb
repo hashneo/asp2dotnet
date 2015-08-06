@@ -92,7 +92,7 @@ Shared Function IsEmpty(v)
     Return String.IsNullOrEmpty(v)
 End Function
 
-<Obsolete("VB6 Consider using Native .NET Classes for performance increase")>
+<Obsolete("VB6 Consider using Native .NET Classes for a performance increase")>
 Shared Function CreateObject(v)
     Return System.Activator.CreateInstance(System.Type.GetTypeFromProgID( v ))
 End Function

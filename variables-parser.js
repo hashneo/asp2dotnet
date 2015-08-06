@@ -7,6 +7,11 @@ VariablesParser = function() {
             var comments = '';
             var match;
 
+
+
+            if ( code.indexOf('mRenderTemplate') !== -1)
+                var debug = 1;
+
             if (match = /((?:\s*'.*?\n)+)(?=\bconst\b\s+)/gi.exec(code)) {
                 comments = match[1];
                 code = code.replace(match[1], '');
@@ -52,13 +57,17 @@ VariablesParser = function() {
             var comments;
             var match;
 
-            var start = code.search(/^\s*((public|private)\s+)?\bdim\b/mi);
+
+            if ( code.indexOf('g_xxx_pageobject_xxx') !== -1)
+                var debug = 1;
+
+            var start = code.search(/^\s*((public|private)\s+)?\b(?:dim)?\b/mi);
 
             comments = code.substr(0, start);
             code = code.substr(start);
 
             // Sanity check to make sure we don't have any commented out variables
-            if (code.search(/^\s*'.*?\bdim\b.*$/gmi) != -1)
+            if (code.search(/^\s*'.*?\b(?:dim)?\b.*$/gmi) != -1)
                 return null;
 
             if (comments.trim().length > 0) {
@@ -80,7 +89,7 @@ VariablesParser = function() {
 
             var visibility;
 
-            if (match = /(\s*(?:(public|private)?\s*dim)\s*)/gi.exec(code)) {
+            if (match = /(\s*(?:(public|private)?\s*(?:dim)?)\s*)/gi.exec(code)) {
                 code = code.replace(match[1], '');
                 visibility = match[2];
             }
@@ -133,7 +142,8 @@ VariablesParser = function() {
 
 
         // Strip out all DIM and CONST declarations
-        var regEx = /^(((?:'.*?\n){0,}?)(?:private|public)?\s*\b(const|dim)+\b\s+(?:[\s\S]+?))\s*$/gmi;
+        //var regEx = /^(((?:'.*?\n){0,}?)(?:private|public)?\s*\b(const+|dim?)\b\s+(?:[\s\S]+?))\s*$/gmi;
+        var regEx = /^(((?:'.*?\n){0,}?)\s*(?:(?:private|public)?\s*\b(const|dim)|((?:private|public)+))\b\s+(?:[\s\S]+?))\s*$/gmi;
 
         var remainingData = data;
 
@@ -163,7 +173,7 @@ VariablesParser = function() {
 
             remainingData = remainingData.replace(codeBlock, "");
 
-            switch (match[3].toLowerCase()) {
+            switch (match[3] !== undefined ? match[3].toLowerCase() : '' ) {
                 case 'dim':
                     var variableDecl = parseDim(codeBlock);
                     if (variableDecl != null)
@@ -179,7 +189,13 @@ VariablesParser = function() {
                         globalBlocks += '\t' + codeBlock;
                     break;
                 default:
-                    globalBlocks += '\t' + codeBlock;
+                    var variableDecl = parseDim(codeBlock);
+                    if (variableDecl != null)
+                        variableDecls.push(variableDecl);
+                    else
+                        globalBlocks += '\t' + codeBlock;
+                    break;
+                    //globalBlocks += '\t' + codeBlock;
             }
         }
 

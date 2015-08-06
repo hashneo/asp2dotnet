@@ -270,8 +270,8 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             }else{
                 console.log( 'writing aspx source file => ' + entry.aspx );
                 aspx = fs.createWriteStream(entry.aspx);
-                writtenFiles.push(entry.aspx);
             }
+            writtenFiles.push(entry.aspx);
         }
 
         if ( argv.overwrite == undefined && fs.existsSync(entry.vb) ){
@@ -292,8 +292,8 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 } else {
                     console.log('writing vb source file => ' + entry.vb);
                     vb = fs.createWriteStream(entry.vb);
-                    writtenFiles.push(entry.vb);
                 }
+                writtenFiles.push(entry.vb);
             }else{
                 console.log('writing class => ' + entry.class + ' to a temp stream');
                 vb = new streamBuffers.WritableStreamBuffer({
@@ -358,9 +358,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         var codeBlock = match[1];
         var className = match[3];
         var classData = match[4];
-
-        if ( className === 'cAuthor')
-            __debug = 1;
 
         if ( entry.name !== 'vb6'){
             classData = processFile( { 'type' : 'class', 'level' : entry.level, 'name' : fileName, 'class' : className,  'data' : '<%\n\n' + classData + '\n\n%>' }, rabbitHoleMode, writeMode );
@@ -535,6 +532,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             for (var cls in functionMap){
                 if ( cls === entry.name || cls.indexOf('page') == 0 )
                     continue;
+
                // if ( functionMap[cls]['_Level'] > entry.level )
                //     continue;
 
@@ -554,31 +552,17 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 //************************************************************
                 function doSubstitution(_type, _what, _with, onMatch) {
 
+                    if ( code.indexOf('templateid = g_xxx_pageclass_override') > -1 )
+                        __Debug = 1;
+
                     var regEx;
 
                     //regEx = new RegExp('^\\n?\\s*((?=(?:public|private)?\\s*(sub|function))|.*?)((?:\\w+\\.)?\\b' + _what.name + '\\b).*$', 'gmi' )
 
-                    regEx = new RegExp('.*?\\b((?:\\w+\\.)?' + _what.name + ')\\b', 'gi');
+                    regEx = new RegExp('\\b((?:\\w+\\.)?' + _what.name.trim() + ')\\b', 'gi');
 
                     code = code.replace( regEx, function(m, p1, p2, p3, offset, string){
 
-                        if ( _what.name === 'ID' && code.indexOf('edit_book.asp') > 0 )
-                            _debug = 1;
-
-                        //if ( m.indexOf('AssociateAuthorWithBook') > 0 )
-                        //debugger;
-                        // I have no idea why the above regex is ignoring
-                        /*
-                        if ( p1.match(/\b(sub|function)\b/gi) != null && p2 === undefined ){
-                            return m;
-                        }
-
-                        if (p2 !== undefined){
-                            return m;
-                        }
-
-                        p1 = p3;
-*/
                         if ( !onMatch(p1) ){
                             return m;
                         }
@@ -593,6 +577,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         }
 
                         // Check for being in comments or Strings
+
                         if ( m.indexOf('\'')!= -1 ){
                             var _where =  m.search(new RegExp( '\\b' + _what.name + '\\b','gi' ));
                             if ( _where != -1 ){
@@ -607,8 +592,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                             }
                         }
 
-
-
                         _what.hits += 1;
                         inUse = true;
 
@@ -619,9 +602,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                                 });
                             }
                         }
-                        return m.replace( new RegExp('\\b' + p1 + '\\b', 'gi'), function(m2){
+                        //return m.replace( new RegExp('\\b' + p1 + '\\b', 'i'), function(m2){
                             return  _with;
-                        });
+                        //});
                     });
                 }
 
@@ -644,12 +627,15 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         }
                         return true;
                     });
+
+                    // We won't resolve classes as globals since you should have
+                    // already thought about it. Our Vb6 class is a special case!
+                    if ( cls !== 'Vb6')
+                        continue;
+
                 }
 
                 for (var name in functionMap[cls]) {
-
-                    if ( thisFunction.name === 'OTRunProcReturnCodeWithTimeout' && name === 'OTRunProcReturnCode')
-                        __Debug = 1;
 
                     if ( isReservedName(name) || ( thisFunction !== undefined && name.toLowerCase() === thisFunction.name.toLowerCase() ) )
                         continue;
@@ -658,9 +644,8 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
                         functionMap[cls][name].forEach( function( item ){
 
-                            //if ( item.name.toLowerCase() === 'id' && cls.toLowerCase() === 'cauthor' )
-                            //   debugger;
-
+                            if ( item.name === 'g_xxx_pageclass_override')
+                                debug = 1;
                             if ( ( thisFunction !== undefined && item.name.toLowerCase() === thisFunction.name.toLowerCase() ) )
                                 return;
 
@@ -676,8 +661,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                             if ( item.visibility !== undefined && item.visibility.toLowerCase() === 'private')
                                 return;
                             doSubstitution('var', item, _with, function(match){
-                                //if ( match.indexOf('ID') > 0 && code.indexOf('skyblue') > 0)
-                                //    debugger;
+
                                 if ( match.indexOf('.') > 0 ){
                                     var whichClass = match.split('.')[0];
                                     if ( !whichClass.equalsIgnoreCase( item.name) )
@@ -698,8 +682,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         if ( functionMap[cls][name].visibility.toLowerCase() === 'private')
                             continue;
                         doSubstitution('function', functionMap[cls][name], _with, function(match){
-                            //if ( match.indexOf('ID') > 0 && code.indexOf('skyblue') > 0)
-                            //    debugger;
+
                             if ( match.indexOf('.') > 0 ){
                                 var whichClass = match.split('.')[0];
                                 if ( !whichClass.equalsIgnoreCase( functionMap[cls][name].name) )
@@ -737,6 +720,8 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             var theVar = classProperty._Variable;
 
             if (theVar != undefined ){
+                if ( theVar.name === 'mRenderTemplate')
+                    __debug = 1;
                 var Line = '\t' + theVar.visibility + ' ' + theVar.name + " As Object"
                 if (theVar.comment !== undefined) {
                     Line = formatCommentBlock(theVar.comment) + Line;
@@ -749,16 +734,15 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             if ( classProperty.get !== undefined ){
                 var theGet = classProperty.get;
-                if ( theGet.visibility === undefined )
-                    debugger;
-                getStr = (theGet.visibility.toLowerCase() !== 'public' ? theGet.visibility : '') + ' Get' +
+
+                getStr = (theGet.visibility.toLowerCase() !== 'public' ? theGet.visibility : '') + ' Get\n' +
                     processFunctionMap(theGet) +
                     'End Get\n'
             }
 
             if ( classProperty.let !== undefined ){
                 var theSet = classProperty.let;
-                setStr = (theSet.visibility.toLowerCase() !== 'public' ? theSet.visibility : '') + ' Set(' +  theSet.setParam + ' As Object )' +
+                setStr = (theSet.visibility.toLowerCase() !== 'public' ? theSet.visibility : '') + ' Set(' +  theSet.setParam + ' As Object )\n' +
                     processFunctionMap(theSet) +
                     'End Set\n'
             }

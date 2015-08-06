@@ -6,7 +6,7 @@ PropertiesParser = function(){
     this.parse = function(data){
 
         // Strip out any GET/LET statements
-        var regEx = /(((?!'(?:\n))(?:\s*'.*?(?:\n))*)\s*((public|private)?\s*property\s+(get|let)\s+(\w+)\s*\((\w*)\)?)([\s\S]*?)(?:end\s+(?:property)))/gi;
+        var regEx = /(((?!'(?:\n))(?:\s*'.*?(?:\n))*)\s*((public|private)?\s*property\s+(get|let)\s+(\w+)\s*(?:\((\w*)\)){0,1})([\s\S]*?)(?:end\s+(?:property)))/gi;
 
         var remainingData = data;
 
@@ -54,7 +54,7 @@ PropertiesParser = function(){
                             {
                                 'name' : theVar,
                                 'visibility' : p2,
-                                'comment' : p3
+                                'comment' : p3 !== undefined ? p3.replace(/^'/gm, '').split('\n') : undefined
                             };
                             return '';
                         });
@@ -77,7 +77,7 @@ PropertiesParser = function(){
                             {
                                 'name' : theVar,
                                 'visibility' : p2,
-                                'comment' : p3
+                                'comment' : p3 !== undefined ? p3.replace(/^'/gm, '').split('\n') : undefined
                             };
                             return '';
                         });
@@ -87,7 +87,10 @@ PropertiesParser = function(){
 
             classProperties[property.name][property.type] = property;
 
-            remainingData = remainingData.replace(codeBlock.trim(), "");
+            codeBlock = codeBlock.trim();
+            remainingData = remainingData.replace(codeBlock, function(m){
+                return '';
+            });
         }
 
         classProperties.forEach = function (f){
