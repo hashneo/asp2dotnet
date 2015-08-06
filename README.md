@@ -1,5 +1,13 @@
 # asp2dotnet
 
+##To Install##
+```
+git clone https://github.com/hashneo/asp2dotnet.git
+
+cd asp2dotnet
+
+npm install
+```
 ##To run##
 ```
 node app.js --base <root ASP directory> --page <start page> --project <project name> --out <target path> [--rabbit-hole] [--verbose] [--no-includes] [--overwrite]
