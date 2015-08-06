@@ -16,8 +16,8 @@ var functionMapCache = {};
 var writtenClasses = {};
 var basePath;
 var sourceFiles = [];
-
 var writtenFiles = [];
+var targetNamespace;
 
 String.prototype.endsWith = function (suffix) {
     return this.indexOf(suffix, this.length - suffix.length) !== -1;
@@ -530,7 +530,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             var includeClasses =  [ entry.class ];
 
             for (var cls in functionMap){
-                if ( cls === entry.name || cls.indexOf('page') == 0 )
+                if ( cls === entry.class || functionMap[cls]._Type == 'page' )
                     continue;
 
                // if ( functionMap[cls]['_Level'] > entry.level )
@@ -551,9 +551,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 // function doSubstitution
                 //************************************************************
                 function doSubstitution(_type, _what, _with, onMatch) {
-
-                    if ( code.indexOf('templateid = g_xxx_pageclass_override') > -1 )
-                        __Debug = 1;
 
                     var regEx;
 
@@ -630,7 +627,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
                     // We won't resolve classes as globals since you should have
                     // already thought about it. Our Vb6 class is a special case!
-                    if ( cls !== 'Vb6')
+                    if ( cls !== 'Vb6' )// && cls !== entry.class)
                         continue;
 
                 }
@@ -653,13 +650,16 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                                 return;
 
                             var _with = varName + '.' + item.var;
+
                             if (cls === entry.class)
                                 _with = 'Me.' + item.var;
+
                             if ( name === '_Constants')
                                 _with = cls + '.' + item.var;
 
                             if ( item.visibility !== undefined && item.visibility.toLowerCase() === 'private')
                                 return;
+
                             doSubstitution('var', item, _with, function(match){
 
                                 if ( match.indexOf('.') > 0 ){
@@ -720,8 +720,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             var theVar = classProperty._Variable;
 
             if (theVar != undefined ){
-                if ( theVar.name === 'mRenderTemplate')
-                    __debug = 1;
                 var Line = '\t' + theVar.visibility + ' ' + theVar.name + " As Object"
                 if (theVar.comment !== undefined) {
                     Line = formatCommentBlock(theVar.comment) + Line;
@@ -815,7 +813,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             writeClass = false;
 
         if (aspx != null) {
-            aspx.write( '<%@ Page Language="VB" AutoEventWireup="true" CodeBehind="' + entry.name + '.aspx.vb" Inherits="' + argv.project + '.' + entry.class + '" %>' )
+            aspx.write( '<%@ Page Language="VB" AutoEventWireup="true" CodeBehind="' + entry.name + '.aspx.vb" Inherits="' + targetNamespace + '.' + entry.class + '" %>' )
         }
 
         if ( writeClass ) {
@@ -942,6 +940,8 @@ var startPage = argv.page;
 var targetPath = argv.out;
 var rabbitHoleMode = argv['rabbit-hole'];
 
+targetNamespace = argv.namespace !== undefined ? argv.namespace : argv.project;
+
 var functionMapFile = path.join( targetPath, "function_map.json" );
 
 // If hte function map cache exists, read it!
@@ -1052,7 +1052,7 @@ if ( argv.overwrite || !fs.existsSync(targetProjFile) ) {
 
     data = data.replace('%ITEMS%', files.join('\n'));
     data = data.replace('%COMPILES%', codeFiles.join('\n'));
-    data = data.replace('%NAMESPACE%', argv.project);
+    data = data.replace('%NAMESPACE%', targetNamespace );
 
     var proj = fs.createWriteStream(targetProjFile);
 

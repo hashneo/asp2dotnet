@@ -14,12 +14,13 @@ node app.js --base <root ASP directory> --page <start page> --project <project n
 
 --rabbit-hole = Follow linked ASP pages and try and process the whole site.
 --verbose = Print more stuff to the screen
---project = Project which will be created. Also creates the namespace of the classes.
+--project = Project which will be created.
+--namespace = Namespace of the classes. If not specified, takes the project name.
 --no-includes = Ignore processing include files
 --overwrite = By default the program won't overwrite existing generated aspx and vb files, this ignores that.
 
 And example would be:
-node app.js --base c:\inetpub\wwwroot --page default.asp --project myapp --out c:\inetpub\asp.net --rabbit-hole
+node app.js --base c:\inetpub\wwwroot --page default.asp --namespace mynamespace --project myapp --out c:\inetpub\asp.net --rabbit-hole
 ```
 Make sure you have the latest version of node.js (0.12.0) else you will see
 
