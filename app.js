@@ -274,6 +274,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             writtenFiles.push(entry.aspx);
         }
 
+        if ( entry.vb != null )
+            writtenFiles.push(entry.vb);
+
         if ( argv.overwrite == undefined && fs.existsSync(entry.vb) ){
             console.log( 'WARNING: vb file already exists => ' + entry.vb + ', skipping' );
         }else{
@@ -293,7 +296,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                     console.log('writing vb source file => ' + entry.vb);
                     vb = fs.createWriteStream(entry.vb);
                 }
-                writtenFiles.push(entry.vb);
             }else{
                 console.log('writing class => ' + entry.class + ' to a temp stream');
                 vb = new streamBuffers.WritableStreamBuffer({
