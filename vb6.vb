@@ -102,6 +102,17 @@ Shared Function CCur(v)
     Return v.ToString("c2")
 End Function
 
+<Obsolete("VB6 Eval is Evil!")>
+Shared Function Eval(v)
+    Return ""
+End Function
+
+<Obsolete("VB6 Execute is Evil!")>
+Shared Function Execute(v)
+    Return ""
+End Function
+
+
 ' Wrapper for RegExp
 Public Class RegExp
 	<Obsolete("VB6 RegExp is obsoleted, use the .NET System.Text.RegularExpressions.Regex instead.")>

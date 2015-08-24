@@ -176,6 +176,9 @@
   %COMPILES%
   </ItemGroup>
   <ItemGroup>
+    <Content Include="web.config" />
+  </ItemGroup>
+  <ItemGroup>
     <Folder Include="App_Data\" />
   </ItemGroup>
   <PropertyGroup>

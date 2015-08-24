@@ -131,7 +131,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     }
 
     var fileHeader;
-    var codeBlocks = [];
     var includeFiles = [];
 
     var data;
@@ -165,22 +164,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
     var match;
 
-
     if ( entry.data === undefined ) {
-
-        // If there is no ASP VBScript tag, we move to module mode and don't create an ASP file
-        /*
-        if (!data.match(/<%@.*%>/g)) {
-            entry.aspx = null;
-            entry.vb = entry.vb.replace('.aspx.vb', '.vb');
-            var className = entry.name.toLowerCase().replace(/_/g, ' ').replace(/(\b[a-z](?!\s))/g, function (x) {
-                return x.toUpperCase();
-            }).replace(/ /g, '');
-
-            var prefix = 'cls';
-            entry.class = prefix + className;
-        }
-        */
 
         if (targetPath !== undefined) {
             mkdirp.sync(targetPath, function (err) {
@@ -203,7 +187,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             var matchFile = p2.replace(/\\/g, '/');
 
-            var includeFile = includeFile = path.normalize(path.join(sourcePath, matchFile)).trim();
+            var includeFile = path.normalize(path.join(sourcePath, matchFile)).trim();
 
             if (!fs.existsSync(includeFile)) {
                 console.log('WARNING: include file => ' + includeFile + ' does not exists, skipping');
@@ -560,36 +544,29 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
                     regEx = new RegExp('\\b((?:\\w+\\.)?' + _what.name.trim() + ')\\b', 'gi');
 
-                    code = code.replace( regEx, function(m, p1, p2, p3, offset, string){
+                    code = code.replace( regEx, function(m, p1, offset){
 
                         if ( !onMatch(p1) ){
                             return m;
                         }
 
-                        if ( m.indexOf('"')!= -1 ){
-                            /*
-                             var r = new RegExp( '(["\'])(?:\\b(' + _what.name + ')\\b.*?)?\\1','gi' );
-                             if ( ( (m2 = m.match(r))) != null ) {
-                             if ( m2[0].indexOf(_what.name) != -1)
-                             return m;
-                             }*/
-                        }
-
                         // Check for being in comments or Strings
-
-                        if ( m.indexOf('\'')!= -1 ){
-                            var _where =  m.search(new RegExp( '\\b' + _what.name + '\\b','gi' ));
-                            if ( _where != -1 ){
-                                for ( var i = _where ; i > 0 ; i-- ){
-                                    if ( m[i] == '"' ){
-                                        break;
-                                    }
-                                    if ( m[i] == '\'' ){
-                                        return m;
-                                    }
-                                }
-                            }
+                        x = offset;
+                        var p = 0;
+                        var c = 0;
+                        while(x >= 0 && code[x] != '\n'){
+                            if ( code[x] === '"' )
+                                p++;
+                            if ( ( p % 2 == 0 ) && code[x] === '\'' )
+                                c++;
+                            x--;
                         }
+
+                        if ( p > 0 && p % 2 != 0 )
+                            return m;
+
+                        if ( c > 0 && c % 2 != 0 )
+                            return m;
 
                         _what.hits += 1;
                         inUse = true;
@@ -819,8 +796,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         }
 
         if ( writeClass ) {
-
-
             if (aspx != null) {
                 vb.write('Public Class ' + entry.class + '\n\n');
                 vb.write('\tInherits AspPage' + '\n');
@@ -830,6 +805,11 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 vb.write('\tInherits PageClass' + '\n')
 
                 vb.write('\n');
+            }
+
+            if ( sourceFile !== undefined ) {
+                vb.write('\t\' Original Source file -> ');
+                vb.write('file://' + sourceFile + '\n\n');
             }
 
             if (fileHeader !== undefined) {
@@ -1016,6 +996,7 @@ console.log ("finished processing at => " + new Date().toLocaleTimeString());
 // Write out our base class
 fs.writeFileSync( path.join( targetPath, "PageClass.vb" ), fs.readFileSync('PageClass.vb') );
 fs.writeFileSync( path.join( targetPath, "AspPage.vb" ), fs.readFileSync('AspPage.vb') );
+fs.writeFileSync( path.join( targetPath, "web.config" ), fs.readFileSync('web.config') );
 
 writtenFiles.push(path.join( targetPath, "PageClass.vb" ));
 writtenFiles.push(path.join( targetPath, "AspPage.vb" ));
@@ -1060,7 +1041,6 @@ if ( argv.overwrite || !fs.existsSync(targetProjFile) ) {
 
     proj.write(data);
 }
-
 
 console.log( 'all done' );
 
