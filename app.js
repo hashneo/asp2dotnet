@@ -46,6 +46,7 @@ function replaceInlineCode(code) {
 function processFile( entry, rabbitHoleMode, writeMode ) {
 
     var sourceFile = entry.in;
+    var sourceStat = sourceFile != undefined ? fs.statSync(sourceFile) : undefined;
 
     var vbSourceFile = false
 
@@ -187,7 +188,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     if ( writeMode ){
         if ( entry.aspx != null ){
             if ( argv.overwrite == undefined && fs.existsSync(entry.aspx) ){
-                console.log( 'WARNING: aspx file already exists => ' + entry.aspx + ', skipping' );
+                console.log( 'INFO: aspx file already exists => ' + entry.aspx + ', skipping' );
             }else{
                 console.log( 'writing aspx source file => ' + entry.aspx );
                 aspx = fs.createWriteStream(entry.aspx);
@@ -198,32 +199,55 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         if ( entry.vb != null )
             writtenFiles.push(entry.vb);
 
-        if ( argv.overwrite == undefined && fs.existsSync(entry.vb) ){
-            console.log( 'WARNING: vb file already exists => ' + entry.vb + ', skipping' );
-        }else{
-            if ( entry.vb != null ) {
-                var skipFile = false;
-                if (fs.existsSync(entry.vb)) {
-                    var fd = fs.openSync(entry.vb, 'r');
-                    var buffer = new Buffer(256);
-                    fs.readSync(fd, buffer, 0, buffer.length, 0);
-                    skipFile = (buffer.toString('utf8').indexOf('\'ignore') == 0);
-                    fs.closeSync(fd);
-                }
+        var converterHeader;
 
-                if (skipFile) {
-                    console.log('\'ignore declaration found in vb source file => ' + entry.vb);
-                } else {
-                    console.log('writing vb source file => ' + entry.vb);
-                    vb = fs.createWriteStream(entry.vb);
+        if ( fs.existsSync(entry.vb) ){
+            var fd = fs.openSync(entry.vb, 'r');
+            var buffer = new Buffer(1024);
+            fs.readSync(fd, buffer, 0, buffer.length, 0);
+            var fileHeader = buffer.toString('utf8');
+            fs.closeSync(fd);
+
+            var match;
+
+            if ( ( match = /#Region\s+"asp2dotnet\s+converter\s+header"([\s\S]+?)#End Region/gi.exec(fileHeader) ) != null ){
+                fileHeader = match[1].trim();
+                var regEx =  /^'\s+(.*?):\s+(.*)$/gmi;
+                while ( ( match = regEx.exec( fileHeader ) ) != null ){
+                    if ( converterHeader === undefined )
+                        converterHeader = {};
+                    converterHeader[match[1]] = match[2];
                 }
-            }else{
-                console.log('writing class => ' + entry.class + ' to a temp stream');
-                vb = new streamBuffers.WritableStreamBuffer({
-                    initialSize: (100 * 1024),      // start as 100 kilobytes.
-                    incrementAmount: (10 * 1024)    // grow by 10 kilobytes each time buffer overflows.
-                });
             }
+        }
+
+        if ( entry.vb != null ) {
+            var fileProtected = converterHeader != undefined && converterHeader['File Protected'] !== undefined ? JSON.parse(converterHeader['File Protected']) : false;
+            var origModified = converterHeader != undefined && converterHeader['Original Modified'] !== undefined ? Date.parse(converterHeader['Original Modified']) : null;
+            var hasChanged = origModified !== undefined ? +origModified != +sourceStat.mtime : true;
+
+            var skipFile = false;
+
+            if ( argv.overwrite === undefined ) {
+                if (fileProtected)
+                    console.log('INFO: vb file => ' + entry.vb + ' has File Protected = true in the header, skipping');
+
+                if (!hasChanged)
+                    console.log('INFO: source file => ' + sourceFile + ' has not changed, skipping');
+
+                skipFile = fileProtected | !hasChanged;
+            }
+
+            if (!skipFile) {
+                console.log('writing vb source file => ' + entry.vb);
+                vb = fs.createWriteStream(entry.vb);
+            }
+        }else{
+            console.log('writing class => ' + entry.class + ' to a temp stream');
+            vb = new streamBuffers.WritableStreamBuffer({
+                initialSize: (100 * 1024),      // start as 100 kilobytes.
+                incrementAmount: (10 * 1024)    // grow by 10 kilobytes each time buffer overflows.
+            });
         }
     }
 
@@ -698,6 +722,18 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         }
 
         if ( writeClass ) {
+
+            if ( sourceFile !== undefined ) {
+
+                vb.write('#Region \"asp2dotnet converter header\"\n');
+                vb.write('\' Source file: "file://' + sourceFile + '"\n');
+                vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
+                vb.write('\' Date Converted: ' + new Date().toISOString() + '\n');
+                vb.write('\' File Protected: false\n');
+                vb.write('#End Region\n');
+                vb.write('\n');
+            }
+
             if (aspx != null) {
                 vb.write('Public Class ' + entry.class + '\n\n');
                 vb.write('\tInherits AspPage' + '\n');
@@ -707,11 +743,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 vb.write('\tInherits PageClass' + '\n')
 
                 vb.write('\n');
-            }
-
-            if ( sourceFile !== undefined ) {
-                vb.write('\t\' Original Source file -> ');
-                vb.write('"file://' + sourceFile + '"\n\n');
             }
 
             if (fileHeader !== undefined) {
