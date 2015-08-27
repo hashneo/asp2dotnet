@@ -1,16 +1,11 @@
 
 VariablesParser = function() {
 
-    this.parse = function(data, verbose) {
+    this.parse = function(data, verbose, noRename) {
 
         function parseConst(code) {
             var comments = '';
             var match;
-
-
-
-            if ( code.indexOf('mRenderTemplate') !== -1)
-                var debug = 1;
 
             if (match = /((?:\s*'.*?\n)+)(?=\bconst\b\s+)/gi.exec(code)) {
                 comments = match[1];
@@ -53,13 +48,18 @@ VariablesParser = function() {
             return result;
         }
 
+        function isReservedWord( w ){
+            w = w.toLowerCase();
+
+            if (w === 'cdate') return true;
+            if (w === 'char') return true;
+
+            return false;
+        }
+
         function parseDim(code) {
             var comments;
             var match;
-
-
-            if ( code.indexOf('g_xxx_pageobject_xxx') !== -1)
-                var debug = 1;
 
             var start = code.search(/^\s*((public|private)\s+)?\b(?:dim)?\b/mi);
 
@@ -101,9 +101,13 @@ VariablesParser = function() {
             var regEx = /(\w+(?:\s*\(.*?\))*)\s*:*\s*(\w+\s*=\s*(.*|".*"))*\s*('.*)*/gi;
 
             while (( match = regEx.exec(code)) != null) {
-                var thisVar = match[1].replace('g_', '').replace(/^x+_/gmi, '').replace(/_x+$/gmi, '').replace(/_/g, ' ').replace(/(\b[a-z](?!\s))/g, function (x) {
+                var thisVar = noRename ? match[1] : match[1].replace('g_', '').replace(/^x+_/gmi, '').replace(/_x+$/gmi, '').replace(/_/g, ' ').replace(/(\b[a-z](?!\s))/g, function (x) {
                     return x.toUpperCase();
                 }).replace(/ /g, '');
+
+                if ( isReservedWord(thisVar) ){
+                    thisVar = '_' + thisVar;
+                }
 
                 var result = {
                     'visibility': visibility,
@@ -144,6 +148,8 @@ VariablesParser = function() {
         // Strip out all DIM and CONST declarations
         //var regEx = /^(((?:'.*?\n){0,}?)(?:private|public)?\s*\b(const+|dim?)\b\s+(?:[\s\S]+?))\s*$/gmi;
         var regEx = /^(((?:'.*?\n){0,}?)\s*(?:(?:private|public)?\s*\b(const|dim)|((?:private|public)+))\b\s+(?:[\s\S]+?))\s*$/gmi;
+
+        var __debug = 0;
 
         var remainingData = data;
 

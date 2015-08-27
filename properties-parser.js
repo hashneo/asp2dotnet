@@ -6,7 +6,7 @@ PropertiesParser = function(){
     this.parse = function(data){
 
         // Strip out any GET/LET statements
-        var regEx = /(((?!'(?:\n))(?:\s*'.*?(?:\n))*)\s*((public|private)?\s*property\s+(get|let)\s+(\w+)\s*(?:\((\w*)\)){0,1})([\s\S]*?)(?:end\s+(?:property)))/gi;
+        var regEx = /(((?!'(?:\n))(?:\s*'.*?(?:\n))*)\n\s*((public|private)?\s*property\s+(get|let|set)\s+(\w+)\s*(?:\((\w*)\)){0,1})([\s\S]*?)(?:end\s+(?:property)))/gi;
 
         var remainingData = data;
 
@@ -14,6 +14,10 @@ PropertiesParser = function(){
 
         while (( match = regEx.exec(data) ) != null) {
             var codeBlock = match[0];
+
+            remainingData = remainingData.replace(codeBlock, function(){
+                return '';
+            });
 
             var visibility = match[4];
 
@@ -41,6 +45,9 @@ PropertiesParser = function(){
                     'name' : property.name
                 };
 
+            if ( property.type === 'set' )
+                property.type == 'let';
+
             // Lets try and find a variable which is assigned so we can match it up with a DIM in the class
             if ( property.type === 'get' ){
                 var regEx2 = new RegExp('\\s*\\b' + property.name + '\\b\\s*=\\s*(?:\\w*\\()?\\s*(\\w+)\\s*\\)?\\s*', 'gi');
@@ -49,14 +56,14 @@ PropertiesParser = function(){
                     var theVar = match[1].trim();
 
                     if ( classProperties[property.name]['_Variable'] === undefined ){
-                        remainingData = remainingData.replace( new RegExp('\\s*((private|public)(?:\\s*dim)?\\s+' + theVar + ')[\\t\\f]*(\'.*)?', 'gi' ), function( m, p1, p2, p3 ){
+                        remainingData = remainingData.replace( new RegExp('\\s*((private|public)(?:\\s*dim)?\\s+\\b' + theVar + '\\b)[\\t\\f]*(\'.*)?', 'gi' ), function( m, p1, p2, p3 ){
                             classProperties[property.name]['_Variable'] =
                             {
                                 'name' : theVar,
                                 'visibility' : p2,
                                 'comment' : p3 !== undefined ? p3.replace(/^'/gm, '').split('\n') : undefined
                             };
-                            return '';
+                            return m;
                         });
                     }
                 }
@@ -72,14 +79,14 @@ PropertiesParser = function(){
                     var theVar = match[1].trim();
 
                     if ( classProperties[property.name]['_Variable'] === undefined ){
-                        remainingData = remainingData.replace( new RegExp('\\s*((private|public)(?:\\s*dim)?\\s+' + theVar + ')[\\t\\f]*(\'.*)?', 'gi' ), function( m, p1, p2, p3 ){
+                        remainingData = remainingData.replace( new RegExp('\\s*((private|public)(?:\\s*dim)?\\s+\\b' + theVar + '\\b)[\\t\\f]*(\'.*)?', 'gi' ), function( m, p1, p2, p3 ){
                             classProperties[property.name]['_Variable'] =
                             {
                                 'name' : theVar,
                                 'visibility' : p2,
                                 'comment' : p3 !== undefined ? p3.replace(/^'/gm, '').split('\n') : undefined
                             };
-                            return '';
+                            return m;
                         });
                     }
                 }
@@ -87,10 +94,15 @@ PropertiesParser = function(){
 
             classProperties[property.name][property.type] = property;
 
-            codeBlock = codeBlock.trim();
+            //codeBlock = codeBlock.trim();
+
+            //totalRemoved += codeBlock.length();
+/*
+            remainingData = remainingData.substr( match.index.toExponential()
             remainingData = remainingData.replace(codeBlock, function(m){
                 return '';
             });
+     */
         }
 
         classProperties.forEach = function (f){

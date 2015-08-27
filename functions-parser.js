@@ -1,5 +1,7 @@
 FunctionsParser = function(){
 
+    require('./string-extensions.js');
+
     var sanitizer = require('./code-sanitizer');
     var variablesParser = require('./variables-parser');
 
@@ -71,7 +73,6 @@ FunctionsParser = function(){
 
             startPos -= (commentBlock.length + offset);
 
-
             if ( fnName.toLowerCase() === 'class_initialize' ){
                 fnName = 'vb6_Class_Initialize';
                 fnSignature = fnSignature.replace(/class_initialize/gi,fnName);
@@ -102,7 +103,13 @@ FunctionsParser = function(){
                 'code' : sanitizer.clean( codeBlock.replace(/([^\n]+)/g, '\t$1') )
             };
 
-            var result = variablesParser.parse( thisBlock.code );
+            var result = variablesParser.parse( thisBlock.code, false, true );
+
+            result.vars.forEach( function( thisVar ){
+                if ( thisVar.name !== thisVar.var ){
+                    thisBlock.code = thisBlock.code.substitute( thisVar.name, thisVar.var );
+                }
+            });
 
             thisBlock['vars'] = result.vars;
 

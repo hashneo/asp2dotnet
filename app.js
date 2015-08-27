@@ -11,6 +11,8 @@ var propertiesParser = require('./properties-parser');
 var functionsParser = require('./functions-parser');
 var sanitizer = require('./code-sanitizer');
 
+require('./string-extensions.js');
+
 var functionMap = {};   // Map of global functions which we need to tie back to the defining class later
 var functionMapCache = {};
 var writtenClasses = {};
@@ -18,74 +20,6 @@ var basePath;
 var sourceFiles = [];
 var writtenFiles = [];
 var targetNamespace;
-
-String.prototype.endsWith = function (suffix) {
-    return this.indexOf(suffix, this.length - suffix.length) !== -1;
-};
-
-String.prototype.equalsIgnoreCase = function (what) {
-    if (what === undefined)
-        return false;
-    return this.toLowerCase() === what.toLowerCase();
-};
-
-
-String.prototype.splice = function (pos,size) {
-    if (size == 0)
-        return this;
-    var a = this.substr(0,pos);
-    var b = this.substr(pos + size + 1);
-    return a + b;
-};
-
-String.prototype.replaceAt = function(index, character) {
-    return this.substr(0, index) + character + this.substr(index+character.length);
-};
-
-String.prototype.functionReplace = function( _from, _to, _left, _right ) {
-
-    var re = new RegExp('[^\.]\\b' + _from + '\\b\\s*\\(.*', 'gi');
-
-    var t = this;
-
-    t = t.replace( re, function(match, p1){
-
-        if ( _left === undefined ) _left = '(';
-        if ( _right === undefined ) _right = ')';
-
-        var pos;
-
-        while( (pos = match.search(re)) != -1 ) {
-            pos++;
-            var a = 0;
-            match = match.substr(0,pos) + _to + match.substr( pos + _from.length);
-            pos += _to.length;
-            var start = -1;
-            var end = -1;
-            for (var i = pos; i < match.length; i++) {
-                if (match[i] == '(') {
-                    a++;
-                    if (start == -1) start = i;
-                }
-
-                if (match[i] == ')') {
-                    if (--a == 0) {
-                        end = i;
-                        break;
-                    }
-                }
-            }
-            if (start != -1 && end != -1) {
-                var t = match.replaceAt(start, _left).replaceAt(end, _right);
-                match = t;
-            }
-        }
-        return match;
-    });
-
-    return t;
-};
-
 
 function replaceInlineCode(code) {
     var regEx = /<%[\s\n\t]*=\s*([\s\S]+?)[\s\n\t]*%>/gi;
@@ -159,7 +93,10 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         data = data.replace(/\r/g,'\n');
 
         // Now clean the rest since we are In Unix Mode. Get rid of VBScript _ line separators, fix string concats, code markers
-        data = data.replace(/_\s*\n(\t*|\s*)/gi,'').replace(/&"/gi,'& "').replace(/"&/gi,'" &').replace(/<%\s+=/gi,'<%=');
+        data = data.replace(/_\s*\n(\t*|\s*)/gi,'').replace(/<%\s+=/gi,'<%=');
+
+        // fix up ampersands that have no space between tem and words
+        //data = data.replace(/&"/gi,'& "').replace(/"&/gi,'" &');
     }
 
     var match;
@@ -434,7 +371,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     var globalBlocks = '';
 
     // Finally get all of the Variables
-    result = variablesParser.parse( result.data, argv.verbose );
+    result = variablesParser.parse( result.data, argv.verbose, entry.type === 'class' );
 
     functionMap[entry.class]['_Variables'] = result.vars;
     functionMap[entry.class]['_Constants'] = result.consts;
@@ -483,6 +420,30 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         for (var i = 0; i < functionMap[entry.class]['_Variables'].length; i++) {
             var varDecl = functionMap[entry.class]['_Variables'][i];
             for (var x = 0; x < varDecl.length; x++) {
+
+                for( var functionName in functionMap[entry.class]){
+
+                    if ( functionName[0] === '_')
+                        continue;
+                    if( functionName.equalsIgnoreCase(varDecl[x].var) ){
+                        varDecl[x].var = '_' + varDecl[x].var;
+                        /*
+                        varDecl[x].visibility = 'Protected';
+
+                        for ( var propName in functionMap[entry.class]['_Properties'] ){
+                            if ( propName.equalsIgnoreCase( varDecl[x].var ) ){
+                                break;
+                            }
+                        }*/
+                    }9
+                }
+
+                for ( var propName in functionMap[entry.class]['_Properties'] ){
+                    if ( propName.equalsIgnoreCase( varDecl[x].var ) ){
+                        varDecl[x].var = '_' + varDecl[x].var;
+                    }
+                }
+
                 var type = varDecl[x].type;
                 if ( type === undefined ) type = "Object"
                 var Line = '\t' + varDecl[x].visibility + ' Property ' + varDecl[x].var  + ' As ' + type;
@@ -533,57 +494,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
                 var inUse = false;
 
-                //************************************************************
-                // function doSubstitution
-                //************************************************************
-                function doSubstitution(_type, _what, _with, onMatch) {
-
-                    var regEx;
-
-                    //regEx = new RegExp('^\\n?\\s*((?=(?:public|private)?\\s*(sub|function))|.*?)((?:\\w+\\.)?\\b' + _what.name + '\\b).*$', 'gmi' )
-
-                    regEx = new RegExp('\\b((?:\\w+\\.)?' + _what.name.trim() + ')\\b', 'gi');
-
-                    code = code.replace( regEx, function(m, p1, offset){
-
-                        if ( !onMatch(p1) ){
-                            return m;
-                        }
-
-                        // Check for being in comments or Strings
-                        x = offset;
-                        var p = 0;
-                        var c = 0;
-                        while(x >= 0 && code[x] != '\n'){
-                            if ( code[x] === '"' )
-                                p++;
-                            if ( ( p % 2 == 0 ) && code[x] === '\'' )
-                                c++;
-                            x--;
-                        }
-
-                        if ( p > 0 && p % 2 != 0 )
-                            return m;
-
-                        if ( c > 0 && c % 2 != 0 )
-                            return m;
-
-                        _what.hits += 1;
-                        inUse = true;
-
-                        if ( _what.parameters !== undefined && _what.parameters.length > 0 ){
-                            if (  m.match( new RegExp( p1 + '\\s*\\(') ) == null ){
-                                m = m.replace( new RegExp('^(.*)\\b' + p1 + '\\b\\s*(?!\\s*=)(.+?)(?=(?:$))', 'm'), function(m2, p2, p3){
-                                    return p2 + p1 + '( ' + p3 + ' )';
-                                });
-                            }
-                        }
-                        //return m.replace( new RegExp('\\b' + p1 + '\\b', 'i'), function(m2){
-                            return  _with;
-                        //});
-                    });
-                }
-
                 function isReservedName(n){
                     n = n.toLowerCase();
 
@@ -595,12 +505,13 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 }
 
                 if ( functionMap[cls]['_Type'] === 'class'){
-                    doSubstitution('var', { 'name' : 'new\\s+' + cls }, 'New ' + cls + '( Page )', function(match){
+                    code = code.substitute( { 'name' : 'new\\s+' + cls }, 'New ' + cls + '( Page )', function(match){
                         if ( match.indexOf('.') > 0 ){
                             var whichClass = match.split('.')[0];
                             if ( !whichClass.equalsIgnoreCase( item.name) )
                                 return false;
                         }
+                        //inUse = true;
                         return true;
                     });
 
@@ -620,8 +531,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
                         functionMap[cls][name].forEach( function( item ){
 
-                            if ( item.name === 'g_xxx_pageclass_override')
-                                debug = 1;
                             if ( ( thisFunction !== undefined && item.name.toLowerCase() === thisFunction.name.toLowerCase() ) )
                                 return;
 
@@ -639,13 +548,14 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                             if ( item.visibility !== undefined && item.visibility.toLowerCase() === 'private')
                                 return;
 
-                            doSubstitution('var', item, _with, function(match){
+                            code = code.substitute(item, _with, function(match){
 
                                 if ( match.indexOf('.') > 0 ){
                                     var whichClass = match.split('.')[0];
                                     if ( !whichClass.equalsIgnoreCase( item.name) )
                                         return false;
                                 }
+                                inUse = true;
                                 return true;
                             });
                         });
@@ -660,13 +570,14 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                             _with = cls + '.' + name
                         if ( functionMap[cls][name].visibility.toLowerCase() === 'private')
                             continue;
-                        doSubstitution('function', functionMap[cls][name], _with, function(match){
+                        code = code.substitute( functionMap[cls][name], _with, function(match){
 
                             if ( match.indexOf('.') > 0 ){
                                 var whichClass = match.split('.')[0];
                                 if ( !whichClass.equalsIgnoreCase( functionMap[cls][name].name) )
                                     return false;
                             }
+                            inUse = true;
                             return true;
                         });
                     }
@@ -695,15 +606,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             if (typeof classProperty === "function") {
                 continue;
-            }
-            var theVar = classProperty._Variable;
-
-            if (theVar != undefined ){
-                var Line = '\t' + theVar.visibility + ' ' + theVar.name + " As Object"
-                if (theVar.comment !== undefined) {
-                    Line = formatCommentBlock(theVar.comment) + Line;
-                }
-                varDelcStr += Line + '\n';
             }
 
             var getStr = '';
@@ -809,7 +711,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             if ( sourceFile !== undefined ) {
                 vb.write('\t\' Original Source file -> ');
-                vb.write('file://' + sourceFile + '\n\n');
+                vb.write('"file://' + sourceFile + '"\n\n');
             }
 
             if (fileHeader !== undefined) {
@@ -918,7 +820,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 }
 
 basePath = argv.base;
-var startPage = argv.page;
 var targetPath = argv.out;
 var rabbitHoleMode = argv['rabbit-hole'];
 
@@ -933,7 +834,13 @@ if ( fs.existsSync(functionMapFile) ) {
 
 sourceFiles.push( 'vb6.vb' );
 
-sourceFiles.push( path.join( basePath, startPage ) );
+if ( Array.isArray( argv.page ) ){
+    for( var i in argv.page ){
+        sourceFiles.push( path.join( basePath, argv.page[i] ) );
+    }
+}else{
+    sourceFiles.push( path.join( basePath, argv.page ) );
+}
 
 console.log ("started processing at => " + new Date().toLocaleTimeString());
 
