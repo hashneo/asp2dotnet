@@ -585,6 +585,10 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         });
 
                     } else {
+
+                        if ( localVariables !== undefined && localVariables.contains(name) )
+                            continue;
+
                         var _with = varName + '.' + name;
                         if (cls === entry.class)
                             _with = 'Me.' + name;

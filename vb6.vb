@@ -112,6 +112,11 @@ Shared Function Execute(v)
     Return ""
 End Function
 
+<Obsolete("VB6 Timer is obsoleted")>
+Shared Function Timer()
+    Return  Microsoft.VisualBasic.DateAndTime.Timer
+End Function
+
 
 ' Wrapper for RegExp
 Public Class RegExp
