@@ -56,7 +56,19 @@ CodeSanitizer = function(){
             if ( c > 0 && c % 2 != 0 )
                 return m;
 
-            return p1 + '.' + p2 + '(' + p3 + ')' + (p4 !== undefined ? p4 : '');
+            if ( p3.indexOf('\'') != -1 ){
+                x = p3.length - 1;
+                while( x > 0 ){
+                    if ( p3[x] == '\'' ){
+                        x--;
+                        return p1 + '.' + p2 + '(' + p3.substr(0,x) + ')' + p3.substr(x) + (p4 !== undefined ? p4 : '');
+                    }
+                    x--;
+                }
+                return p1 + '.' + p2 + '(' + p3 + ')' + (p4 !== undefined ? p4 : '');
+            }
+            else
+                return p1 + '.' + p2 + '(' + p3 + ')' + (p4 !== undefined ? p4 : '');
         });
 
         code = code.replace(/\bNew\s+Date\(\)\s+(\+|\-)\s+(\d+)/gmi, 'New Date().AddDays($1$2)');

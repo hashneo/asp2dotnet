@@ -395,7 +395,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     var globalBlocks = '';
 
     // Finally get all of the Variables
-    result = variablesParser.parse( result.data, argv.verbose, entry.type === 'class' );
+    result = variablesParser.parse( result.data, argv.verbose, entry.type === 'class' || (argv.rename == false) );
 
     functionMap[entry.class]['_Variables'] = result.vars;
     functionMap[entry.class]['_Constants'] = result.consts;
