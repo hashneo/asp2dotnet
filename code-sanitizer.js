@@ -14,7 +14,7 @@ CodeSanitizer = function(){
             .replace(/(\s+|\b)Server\.CreateObject\b\s*\((.*?)\)/gi,'$1CreateObject( $2 )')
             .replace(/(\s+|\b)null\b(\s*)/gi,'$1DBNull.Value$2')
             .replace(/(\s+|\b)Empty\b(\s*)/gi,'$1Nothing$2')
-            .replace(/(\s+|\b)Timer\b\s*\(\s*\)?(\s*)/gi,'$1New Timer()$2')
+            //.replace(/(\s+|\b)Timer\b\s*\(\s*\)?(\s*)/gi,'$1New Timer()$2')
             .replace(/(\s+|\b)Date\b\s*\(\s*\)?(\s*)/gi,'$1New Date()$2')
             .replace(/Request\.QueryString\b(\s*\(.*?\))?(.*)/gi,'Request.QueryString$1.ToString()$2')
             .replace(/Request\.Cookies\b(\s*\(.*?\))?(.*)/gi,'Request.Cookies$1.ToString()$2')
@@ -85,6 +85,7 @@ CodeSanitizer = function(){
         //code = code.functionReplace( 'isobject', '($1 Is Nothing)' );
 
         code = code.functionReplace( 'round', 'Math.Round' );
+        code = code.functionReplace( 'abs', 'Math.Abs' );
         code = code.functionReplace( 'array', 'New Object()', '{', '}' );
 
         code = code.replace(/\s+isNullOrEmpty\s*(?=\(*)/gi, function(match, p1){

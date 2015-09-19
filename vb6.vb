@@ -117,6 +117,11 @@ Shared Function Timer()
     Return  Microsoft.VisualBasic.DateAndTime.Timer
 End Function
 
+<Obsolete("VB6 GetRef is Evil!")>
+Shared Function GetRef(methodName)
+    'This is VBScript style reflection, it's supposed to return an executable delegate of method with specified name
+    Return Nothing
+End Function
 
 ' Wrapper for RegExp
 Public Class RegExp
