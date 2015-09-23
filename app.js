@@ -65,7 +65,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         writtenClasses[entry.class] = true;
     }
 
-    var fileHeader;
+    var origHeader;
     var includeFiles = [];
 
     var data;
@@ -240,7 +240,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             if (!skipFile) {
                 console.log('writing vb source file => ' + entry.vb);
-                vb = fs.createWriteStream(entry.vb);
+                // var _fd = fs.openSync( entry.vb, 'w' );
+                // vb = fs.createWriteStream( '', {fd:_fd} );
+                vb = fs.createWriteStream( entry.vb );
             }
         }else{
             console.log('writing class => ' + entry.class + ' to a temp stream');
@@ -377,7 +379,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     }
 
     remainingData = remainingData.replace( /('\s*\$Header[\s\S]+?All\sRights\sReserved.)/gi, function(m,p1){
-        fileHeader = p1;
+        origHeader = p1;
         return '';
     });
 
@@ -749,9 +751,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 vb.write('\n');
             }
 
-            if (fileHeader !== undefined) {
+            if (origHeader !== undefined) {
                 vb.write('\t#Region "Original Header"\n');
-                vb.write(fileHeader + '\n');
+                vb.write(origHeader + '\n');
                 vb.write('\t#End Region\n\n');
             }
 
@@ -841,8 +843,10 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         aspx.end();
 
 
-    if ( vb != null )
+    if ( vb != null ) {
         vb.end();
+        //fs.closeSync(vb.fd);
+    }
 
     if ( writeMode && entry.data !== undefined ){
         data = vb.getContents();
@@ -931,7 +935,7 @@ for( var i = 0 ; i < sourceFiles.length ; i++ ){
     functionMapCache[cacheKey] = functionMap;
 };
 
-fs.writeFileSync( functionMapFile, JSON.stringify( functionMapCache, null, '  ' ) );
+//fs.writeFileSync( functionMapFile, JSON.stringify( functionMapCache, null, '  ' ) );
 
 console.log ("finished processing at => " + new Date().toLocaleTimeString());
 
