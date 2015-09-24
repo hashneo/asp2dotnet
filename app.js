@@ -2,14 +2,77 @@ var fs = require('fs');
 var path = require('path-extra');
 var mkdirp = require('mkdirp');
 var streamBuffers = require("stream-buffers");
-var argv = require('optimist').argv;
+var glob = require('glob');
+
 var uuid = require('node-uuid');
-var isNumeric = require("isnumeric");
+var isNumeric = require("isnumeric")
+
+var argv = require('yargs')
+    .usage('Usage: $0 <options>')
+    .options({
+        'base': {
+            demand: true,
+            describe: 'Base path of ASP Site (Virtual Dir in IIS)',
+            type: 'string'
+        },
+        'page':{
+            demand: true,
+            describe: 'ASP page(s) to process. Wildcards are also ok. !!Beware of Globbing!!. Use /blah/\\*\\*/*.asp for recursion.',
+            type: 'array'
+        },
+        'out' : {
+            demand: true,
+            describe: 'Base output path to write files to. Any include writes will be relative to this path (beware of ../../path/script.asp!)',
+            type: 'string'
+        },
+        'namespace' : {
+            demand: true,
+            describe: 'VB.Net project namespace',
+            type: 'string'
+        },
+        'project' : {
+            demand: true,
+            describe: 'VB.Net project to create. Relative to output path.',
+            type: 'string'
+        },
+        'overwrite' : {
+            demand: false,
+            describe: 'Overwrite all files, ignoring timestamps and File Protected: directive',
+            type: 'boolean'
+        },
+        'no-rename' : {
+            demand: false,
+            describe: 'Prevent renaming of global variables into nicer looking ones',
+            type: 'boolean'
+        },
+        'no-includes' : {
+            demand: false,
+            describe: 'Only process the given ASP files, ignore includes',
+            type: 'boolean'
+        },
+        'rabbit-hole' : {
+            demand: false,
+            describe: 'Look for linked ASP files and add them to the list of files to be processed',
+            type: 'boolean'
+        },
+        'verbose' : {
+            demand: false,
+            describe: 'Print a whole lot of information about what is going on to console',
+            type: 'boolean'
+        }
+    })
+    .wrap(null)
+    .version(function() {
+        return require('./package').version;
+    })
+    .argv;
+
 
 var variablesParser = require('./variables-parser');
 var propertiesParser = require('./properties-parser');
 var functionsParser = require('./functions-parser');
 var sanitizer = require('./code-sanitizer');
+
 
 require('./string-extensions.js');
 
@@ -187,10 +250,11 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
     if ( writeMode ){
         if ( entry.aspx != null ){
-            if ( argv.overwrite == undefined && fs.existsSync(entry.aspx) ){
-                console.log( 'INFO: aspx file already exists => ' + entry.aspx + ', skipping' );
+            if ( argv.overwrite && fs.existsSync(entry.aspx) ){
+                if ( argv.verbose )
+                    console.log( 'INFO: aspx file already exists => ' + entry.aspx + ', skipping' );
             }else{
-                console.log( 'writing aspx source file => ' + entry.aspx );
+                console.log( 'Writing aspx source file => ' + entry.aspx );
                 aspx = fs.createWriteStream(entry.aspx);
             }
             writtenFiles.push(entry.aspx);
@@ -228,24 +292,25 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             var skipFile = false;
 
-            if ( argv.overwrite === undefined ) {
-                if (fileProtected)
+            if ( argv.overwrite ) {
+                if (fileProtected && argv.verbose)
                     console.log('INFO: vb file => ' + entry.vb + ' has File Protected = true in the header, skipping');
 
                 if (!hasChanged)
-                    console.log('INFO: source file => ' + sourceFile + ' has not changed, skipping');
+                    console.log('Source file => ' + sourceFile + ' has not changed, skipping');
 
                 skipFile = fileProtected | !hasChanged;
             }
 
             if (!skipFile) {
-                console.log('writing vb source file => ' + entry.vb);
+                console.log('Writing vb source file => ' + entry.vb);
                 // var _fd = fs.openSync( entry.vb, 'w' );
                 // vb = fs.createWriteStream( '', {fd:_fd} );
                 vb = fs.createWriteStream( entry.vb );
             }
         }else{
-            console.log('writing class => ' + entry.class + ' to a temp stream');
+            if ( argv.verbose )
+                console.log('INFO: writing class => ' + entry.class + ' to a temp stream');
             vb = new streamBuffers.WritableStreamBuffer({
                 initialSize: (100 * 1024),      // start as 100 kilobytes.
                 incrementAmount: (10 * 1024)    // grow by 10 kilobytes each time buffer overflows.
@@ -384,7 +449,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     });
 
     // First remove all Functions
-    var result = functionsParser.parse( remainingData, argv.verbose );
+    var result = functionsParser.parse( remainingData, argv.verbose, entry.in );
     var functionBlocks = result.blocks;
     functionMap[entry.class] = result.map;
     functionMap[entry.class]['_Level'] = entry.level;
@@ -713,7 +778,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
         var writeClass = true;
 
-
         if ( constDeclStr.trim() === '' &&
              varDelcStr.trim() === '' &&
              propertiesStr.trim() === '' &&
@@ -727,18 +791,18 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             aspx.write( '<%@ Page Language="VB" AutoEventWireup="true" CodeBehind="' + entry.name + '.aspx.vb" Inherits="' + targetNamespace + '.' + entry.class + '" %>' )
         }
 
+        if ( sourceFile !== undefined ) {
+
+            vb.write('#Region \"asp2dotnet converter header\"\n');
+            vb.write('\' Source file: "file://' + sourceFile + '"\n');
+            vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
+            vb.write('\' Date Converted: ' + new Date().toISOString() + '\n');
+            vb.write('\' File Protected: false\n');
+            vb.write('#End Region\n');
+            vb.write('\n');
+        }
+
         if ( writeClass ) {
-
-            if ( sourceFile !== undefined ) {
-
-                vb.write('#Region \"asp2dotnet converter header\"\n');
-                vb.write('\' Source file: "file://' + sourceFile + '"\n');
-                vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
-                vb.write('\' Date Converted: ' + new Date().toISOString() + '\n');
-                vb.write('\' File Protected: false\n');
-                vb.write('#End Region\n');
-                vb.write('\n');
-            }
 
             if (aspx != null) {
                 vb.write('Public Class ' + entry.class + '\n\n');
@@ -862,7 +926,7 @@ basePath = argv.base;
 var targetPath = argv.out;
 var rabbitHoleMode = argv['rabbit-hole'];
 
-targetNamespace = argv.namespace !== undefined ? argv.namespace : argv.project;
+targetNamespace = argv.namespace;
 
 var functionMapFile = path.join( targetPath, "function_map.json" );
 
@@ -873,12 +937,8 @@ if ( fs.existsSync(functionMapFile) ) {
 
 sourceFiles.push( 'vb6.vb' );
 
-if ( Array.isArray( argv.page ) ){
-    for( var i in argv.page ){
-        sourceFiles.push( path.join( basePath, argv.page[i] ) );
-    }
-}else{
-    sourceFiles.push( path.join( basePath, argv.page ) );
+for( var i in argv.page ){
+    sourceFiles =  sourceFiles.concat( glob.sync( path.join( basePath, argv.page[i] ) ) );
 }
 
 console.log ("started processing at => " + new Date().toLocaleTimeString());
@@ -947,7 +1007,15 @@ fs.writeFileSync( path.join( targetPath, "web.config" ), fs.readFileSync('web.co
 writtenFiles.push(path.join( targetPath, "PageClass.vb" ));
 writtenFiles.push(path.join( targetPath, "AspPage.vb" ));
 
-var targetProjFile = path.join(targetPath, argv.project + '.vbproj');
+
+var targetProjFile = path.resolve( path.join( targetPath, argv.project ) );
+var targetProjectParts = path.parse(targetProjFile);
+var targetProjectPath = targetProjectParts.dir;
+
+targetProjectParts.ext = '.vbproj';
+targetProjectParts.base = targetProjectParts.name + targetProjectParts.ext;
+
+targetProjFile = path.format(targetProjectParts);
 
 if ( argv.overwrite || !fs.existsSync(targetProjFile) ) {
 
@@ -965,7 +1033,7 @@ if ( argv.overwrite || !fs.existsSync(targetProjFile) ) {
     for (var i = 0; i < writtenFiles.length; i++) {
         var f = writtenFiles[i];
         var parts = path.parse(f);
-        var s = path.relative(targetPath, f);
+        var s = path.relative(targetProjectPath, f);
         var dosPath = s.replace(/\//g, '\\');
 
         if (parts.ext === '.aspx') {

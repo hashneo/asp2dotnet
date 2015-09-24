@@ -5,7 +5,7 @@ FunctionsParser = function(){
     var sanitizer = require('./code-sanitizer');
     var variablesParser = require('./variables-parser');
 
-    this.parse = function(data, verbose){
+    this.parse = function(data, verbose, srcFile){
 
         // Strip out code functions and subs
         var regEx =/^\s*(((?:(public|protected|private)\s+)?(shared\s+)?(?:(?:overrides)\s+)?(sub|function)\s+(\w+)(\s*\(\s*(.*?)\s*\))?){1}([\s\S]+?)(?:end\s+(?:sub|function)){1})[^\n]*$/gmi;
@@ -125,8 +125,7 @@ FunctionsParser = function(){
 
             if ( remainingData.indexOf(fnSignature) != -1 ) {
                 //console.log( 'processing error => ' + entry.in);
-                console.log( fnSignature + ", still exists in the remaining data, aborting!" );
-                throw "";
+                console.log( "WARNING: " + fnSignature + ", still exists in the remaining data, could be a duplicate!. Source file => " + srcFile );
             }
         }
 
