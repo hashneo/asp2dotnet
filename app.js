@@ -363,7 +363,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     }
 
     // Remove classes
-    regEx = /((?!'(?:\n)|(?:\n))(?:\s*'.*?(?:\n))*(?:public|private)?\s*\b(class\b\s*(\w+)\s*(?:'.*)?(?:\n))([\s\S]*?)(?:end\s+(?:class)))/gmi;
+    regEx = /(\n[\t\f ]*(?:public\s|private\s)?\b(class\b\s*(\w+)\s*(?:'.*)?(?:\n))([\s\S]*?)(?:end\s+(?:class)))/gi;
 
     var remainingData = data;
 
