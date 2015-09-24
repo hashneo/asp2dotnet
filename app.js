@@ -250,7 +250,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
     if ( writeMode ){
         if ( entry.aspx != null ){
-            if ( argv.overwrite && fs.existsSync(entry.aspx) ){
+            if ( !argv.overwrite && fs.existsSync(entry.aspx) ){
                 if ( argv.verbose )
                     console.log( 'INFO: aspx file already exists => ' + entry.aspx + ', skipping' );
             }else{
@@ -292,7 +292,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             var skipFile = false;
 
-            if ( argv.overwrite ) {
+            if ( !argv.overwrite ) {
                 if (fileProtected && argv.verbose)
                     console.log('INFO: vb file => ' + entry.vb + ' has File Protected = true in the header, skipping');
 
