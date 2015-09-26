@@ -809,7 +809,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         }
 
         if ( sourceFile !== undefined ) {
-/*
             vb.write('#Region \"asp2dotnet converter header\"\n');
             vb.write('\' Source file: "file://' + sourceFile + '"\n');
             vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
@@ -817,7 +816,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             vb.write('\' File Protected: false\n');
             vb.write('#End Region\n');
             vb.write('\n');
-*/
         }
 
         if ( writeClass ) {
