@@ -8,7 +8,7 @@ FunctionsParser = function(){
     this.parse = function(data, verbose, srcFile){
 
         // Strip out code functions and subs
-        var regEx =/^\s*(((?:(public|protected|private)\s+)?(shared\s+)?(?:(?:overrides)\s+)?(sub|function)\s+(\w+)(\s*\(\s*(.*?)\s*\))?){1}([\s\S]+?)(?:end\s+(?:sub|function)){1})[^\n]*$/gmi;
+        var regEx =/^\s*(((?:(public|protected|private)\s+)?(shared\s+)?(?:(?:overrides)\s+)?(sub|function)\s+(\w+)(\s*\(\s*(.*?)\s*\))?(?:\s+as\s\w+)?){1}([\s\S]+?)(?:end\s+(?:sub|function)){1})[^\n]*$/gmi;
         var match;
 
         var remainingData = data;

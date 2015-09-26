@@ -368,7 +368,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     var remainingData = data;
 
     var classBlocks = '';
-    
+
     while (( match = regEx.exec(data) ) != null) {
         var codeBlock = match[1];
         var className = match[3];
@@ -383,7 +383,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         var commentBlock = data.getCommentsBlocks( match.index );
 
         if ( writeMode ){
-            classBlocks += commentBlock + classData;
+            classBlocks += commentBlock + (commentBlock.length > 0 && !commentBlock.endsWith('\n') ? '\n' : '') + classData;
         }
 
         remainingData = remainingData
@@ -809,7 +809,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         }
 
         if ( sourceFile !== undefined ) {
-
+/*
             vb.write('#Region \"asp2dotnet converter header\"\n');
             vb.write('\' Source file: "file://' + sourceFile + '"\n');
             vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
@@ -817,6 +817,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             vb.write('\' File Protected: false\n');
             vb.write('#End Region\n');
             vb.write('\n');
+*/
         }
 
         if ( writeClass ) {
