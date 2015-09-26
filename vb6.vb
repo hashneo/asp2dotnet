@@ -117,6 +117,11 @@ Shared Function Timer()
     Return  Microsoft.VisualBasic.DateAndTime.Timer
 End Function
 
+<Obsolete("VB6 Escape is obsoleted")>
+Shared Function Escape(str)
+    Return str
+End Function
+
 Delegate Function GetRefDelegate(<[ParamArray]()> list() As Object)
 
 <Obsolete("VB6 GetRef is Evil!")>
