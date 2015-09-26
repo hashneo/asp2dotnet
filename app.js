@@ -368,6 +368,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     var remainingData = data;
 
     var classBlocks = '';
+    
     while (( match = regEx.exec(data) ) != null) {
         var codeBlock = match[1];
         var className = match[3];
@@ -379,11 +380,27 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             classData = codeBlock;
         }
 
+        var commentBlock = data.getCommentsBlocks( match.index );
+
         if ( writeMode ){
-            classBlocks += classData;
+            classBlocks += commentBlock + classData;
         }
 
-        remainingData = remainingData.replace(codeBlock, "");
+        remainingData = remainingData
+            .remove(commentBlock)
+            .remove(codeBlock);
+    }
+
+    // Get Delegates
+    regEx = /(^\s*delegate\s+(?:function|sub)\s+\w+\s*\(.*\).*)/gmi;
+
+    var delegates = '';
+    while (( match = regEx.exec(data) ) != null) {
+        var delegate = match[1];
+
+        delegates += delegate.trim() +'\n';
+
+        remainingData = remainingData.replace(delegate, "");
     }
 
     if (!vbSourceFile) {
@@ -839,6 +856,11 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 vb.write('\t#End Region\n\n');
             }
 
+            if (delegates.length > 0){
+                vb.write('\t#Region "Delegates"\n');
+                vb.write(delegates);
+                vb.write('\t#End Region\n\n');
+            }
 
             if (dimModules.length > 0) {
                 vb.write('\t#Region "Used Modules"\n');

@@ -126,6 +126,7 @@ Shared Function GetRef(methodName) As GetRefDelegate
 End Function
 
 ' Wrapper for RegExp
+
 Public Class RegExp
 	<Obsolete("VB6 RegExp is obsoleted, use the .NET System.Text.RegularExpressions.Regex instead.")>
 	Sub New()

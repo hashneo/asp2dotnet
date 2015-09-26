@@ -9,7 +9,6 @@ String.prototype.equalsIgnoreCase = function (what) {
     return this.toLowerCase() === what.toLowerCase();
 };
 
-
 String.prototype.splice = function (pos,size) {
     if (size == 0)
         return this;
@@ -21,6 +20,71 @@ String.prototype.splice = function (pos,size) {
 String.prototype.replaceAt = function(index, character) {
     return this.substr(0, index) + character + this.substr(index+character.length);
 };
+
+String.prototype.getCommentsBlocks = function( pos ){
+
+    var data = this;
+
+    var i = pos;
+
+    var offset = 0;
+    // If we're on a \n shift to the first char
+    while ( data[i + offset] == '\n' && i + offset < data.length ){
+        offset++;
+    }
+
+    i += offset;
+
+    var commentBlock = '';
+    var previousLine = '';
+    var maxBlankLines = 1;
+    var startPos = i;
+    while (--i >= 0) {
+        if (data[i] == '\n') {
+            if (previousLine.replace(/\s*/,'').length > 0) {
+                if (previousLine.trim()[0] == '\'' || previousLine.trim()[0] == '<')
+                    commentBlock = previousLine + '\n' + commentBlock;
+                else {
+                    if ( commentBlock.length > 0 ){
+                        // If we ate a blank line adjust the startpos to consume the character
+                        startPos -= (1 - (maxBlankLines + 1));
+                    }
+                    break;
+                }
+            }else{
+                if ( ( commentBlock.length == 0 && maxBlankLines-- < -1 ) || commentBlock.length > 0 ){
+                    break;
+                }
+            }
+            previousLine = '';
+        } else {
+            previousLine = data[i] + previousLine;
+        }
+    }
+
+    if ( offset > 0 && commentBlock.length > offset )
+        commentBlock = commentBlock.substr( 0, commentBlock.length - offset );
+
+    return commentBlock;
+}
+
+String.prototype.remove = function(_what){
+
+    if ( _what === undefined || _what === null || _what.length == 0 )
+        return this;
+
+    var removed = false;
+
+    var data = this.replace(_what, function(){
+        removed = true;
+        return '';
+    });
+
+    if ( !removed ){
+        throw "failed to remove string from data."
+    }
+    return data;
+}
 
 String.prototype.functionReplace = function( _from, _to, _left, _right ) {
 
