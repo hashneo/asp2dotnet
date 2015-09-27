@@ -122,6 +122,11 @@ Shared Function Escape(str)
     Return str
 End Function
 
+<Obsolete("VB6 UnEscape is obsoleted")>
+Shared Function UnEscape(str)
+    Return str
+End Function
+
 Delegate Function GetRefDelegate(<[ParamArray]()> list() As Object)
 
 <Obsolete("VB6 GetRef is Evil!")>
