@@ -124,12 +124,12 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
     if ( writeMode ){
 
-        if ( writtenClasses[entry.class] ){
+        if ( writtenClasses[entry.class.toLowerCase()] ){
             //console.log( 'I have already processed file => ' + sourceFile + ', skipping' );
             return;
         }
 
-        writtenClasses[entry.class] = true;
+        writtenClasses[entry.class.toLowerCase()] = true;
     }
 
     var origHeader;
