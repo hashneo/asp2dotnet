@@ -98,7 +98,7 @@ VariablesParser = function() {
                 visibility = "Public";
 
             code = code.replace(/^dim\s+/i, '');
-            var regEx = /(\w+(?:\s*\(.*?\))*)\s*:*\s*(\w+\s*=\s*(.*|".*"))*\s*('.*)*/gi;
+            var regEx = /(\w+(?:\s*\(.*?\))*)\s*:*\s*(?:set\s+)?(\w+\s*=\s*(.*|".*"))*\s*('.*)*/gi;
 
             while (( match = regEx.exec(code)) != null) {
                 var thisVar = noRename ? match[1] : match[1].replace('g_', '').replace(/^x+_/gmi, '').replace(/_x+$/gmi, '').replace(/_/g, ' ').replace(/(\b[a-z](?!\s))/g, function (x) {
@@ -148,8 +148,6 @@ VariablesParser = function() {
         // Strip out all DIM and CONST declarations
         //var regEx = /^(((?:'.*?\n){0,}?)(?:private|public)?\s*\b(const+|dim?)\b\s+(?:[\s\S]+?))\s*$/gmi;
         var regEx = /^(((?:'.*?\n){0,}?)\s*(?:(?:private|public)?\s*\b(const|dim)|((?:private|public)+))\b\s+(?:[\s\S]+?))\s*$/gmi;
-
-        var __debug = 0;
 
         var remainingData = data;
 

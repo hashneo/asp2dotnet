@@ -59,7 +59,11 @@ var argv = require('yargs')
             demand: false,
             describe: 'Print a whole lot of information about what is going on to console',
             type: 'boolean'
-        }
+        },'no-vb6' : {
+            demand: false,
+            describe: 'Doesn\'t add the vb6 wrapper',
+            type: 'boolean'
+        },
     })
     .wrap(null)
     .version(function() {
@@ -460,7 +464,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         remainingData = data.toString('utf8');
     }
 
-    remainingData = remainingData.replace( /('\s*\$Header[\s\S]+?All\sRights\sReserved.)/gi, function(m,p1){
+    remainingData = remainingData.replace( /('\s*\$Header[\s\S]+?All\sRights\sReserved\.?)/gi, function(m,p1){
         origHeader = p1;
         return '';
     });
@@ -966,8 +970,8 @@ console.log ("started processing at => " + new Date().toLocaleTimeString());
 
 for( var i = 0 ; i < sourceFiles.length ; i++ ){
 
-    //if ( i == 0 )
-    //   continue;
+    if ( i == 0 && argv.vb6 == false )
+       continue;
 
     var file = sourceFiles[i];
 
@@ -978,7 +982,7 @@ for( var i = 0 ; i < sourceFiles.length ; i++ ){
 
     var outPath = path.join( targetPath, subPath.toLowerCase() );
 
-    var className = fileName.replace(/_/g,' ').replace(/(\b[a-z](?!\s))/g, function(x){ return x.toUpperCase();}).replace(/ /g,'');
+    var className = fileName.replace(/_/g,' ').replace('.','_').replace(/(\b[a-z](?!\s))/g, function(x){ return x.toUpperCase();}).replace(/ /g,'');
 
     fileName = fileName.toLowerCase();
 
