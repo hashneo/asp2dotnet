@@ -136,8 +136,23 @@ Shared Function GetRef(methodName) As GetRefDelegate
 End Function
 
 ' Wrapper for RegExp
-
 Public Class RegExp
+	Public Property Pattern As String
+	Public Property IgnoreCase As Boolean
+	Public Property GlobalMatch As Boolean
+
+	Public Function Execute(SourceString As String)
+		Return System.Text.RegularExpressions.Regex.Match(SourceString, Pattern)
+	End Function
+
+	Public Function Test(SourceString As String)
+		Return System.Text.RegularExpressions.Regex.IsMatch(SourceString, Pattern)
+	End Function
+
+	Public Function Replace(SourceString As String, ReplaceString As String)
+		Return System.Text.RegularExpressions.Regex.Replace(SourceString, Pattern, ReplaceString)
+	End Function
+
 	<Obsolete("VB6 RegExp is obsoleted, use the .NET System.Text.RegularExpressions.Regex instead.")>
 	Sub New()
 	End Sub
