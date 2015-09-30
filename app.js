@@ -297,7 +297,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             var skipFile = false;
 
             if ( !argv.overwrite ) {
-                if (fileProtected && argv.verbose)
+                if (fileProtected)
                     console.log('INFO: vb file => ' + entry.vb + ' has File Protected = true in the header, skipping');
 
                 if (!hasChanged)
@@ -475,7 +475,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     functionMap[entry.class] = result.map;
     functionMap[entry.class]['_Level'] = entry.level;
     functionMap[entry.class]['_Type'] = entry.type;
-
+    
     // Next we remove all Properties (GET/LET)
     var result = propertiesParser.parse( result.data, argv.verbose );
     functionMap[entry.class]['_Properties'] = result.properties;

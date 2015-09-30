@@ -12,7 +12,7 @@ CodeSanitizer = function(){
             .replace(/(\s+)lenb(\s+)/gi,'$1len$2')
             .replace(/\s{0}_$/gmi,' _')
             .replace(/(\s+|\b)Server\.CreateObject\b\s*\((.*?)\)/gi,'$1CreateObject( $2 )')
-            .replace(/(\s+|\b)null\b(\s*)/gi,'$1DBNull.Value$2')
+            //.replace(/(\s+|\b)null\b(\s*)/gi,'$1VB6.Null$2')
             .replace(/(\s+|\b)Empty\b(\s*)/gi,'$1Nothing$2')
             //.replace(/(\s+|\b)Timer\b\s*\(\s*\)?(\s*)/gi,'$1New Timer()$2')
             .replace(/(\s+|\b)Date\b\s*\(\s*\)?(\s*)/gi,'$1New Date()$2')

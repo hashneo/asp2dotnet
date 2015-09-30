@@ -74,6 +74,9 @@ Public Const adModeShareExclusive As Integer = 12     ' Prevents others from ope
 Public Const adModeShareDenyNone As Integer = 16     ' Allows others to open a connection with any permissions.
 Public Const adModeRecursive As Integer = 4194304     ' Used with adModeShareDenyNone, adModeShareDenyWrite, or adModeShareDenyRead to set permissions on all sub-records of the current Record.
 
+<Obsolete("VB6 Null is obsoleted")>
+Public Const Null as Object = Nothing
+
 <Obsolete("VB6 IsNull is obsoleted")>
 Shared Function IsNull(v)
     If (TypeOf v Is String) Then

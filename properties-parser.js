@@ -6,7 +6,7 @@ PropertiesParser = function(){
     this.parse = function(data){
 
         // Strip out any GET/LET statements
-        var regEx = /(((?!'(?:\n))(?:\s*'.*?(?:\n))*)\n\s*((public|private)?\s*property\s+(get|let|set)\s+(\w+)\s*(?:\((\w*)\)){0,1})([\s\S]*?)(?:end\s+(?:property)))/gi;
+        var regEx = /(((?!'(?:\n))(?:\s*'.*?(?:\n))*)\n\s*((public|private)?\s*(?:default\s+)?property\s+(get|let|set)\s+(\w+)\s*(?:\((\w*)\)){0,1})([\s\S]*?)(?:end\s+(?:property)))/gi;
 
         var remainingData = data;
 
