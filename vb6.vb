@@ -89,7 +89,16 @@ End Function
 
 <Obsolete("VB6 IsObject is obsoleted")>
 Shared Function IsObject(v)
-    Return ( Not( v Is Nothing ) )
+		If (v Is Nothing) Then
+			Return False
+		End If
+		If (v.GetType().IsPrimitive) Then
+			Return False
+		End If
+		If (TypeOf v Is Object) Then
+			Return True
+		End If
+		Return False
 End Function
 
 <Obsolete("VB6 IsEmpty is obsoleted")>
