@@ -419,7 +419,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 line = line.replace(/<%@.*%>/g, '');
 
                 if (line.trim().length > 0)
-                    outData += '\n\t\tResponse.Write ("' + line + '")';
+                    outData += '\n\t\tResponse_WriteLine ("' + line + '")';
             }
 
             return outData + '\n';
@@ -433,7 +433,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         });
 
 
-        // Convert all inline HTML code to Response.Writes
+        // Convert all inline HTML code to Response_WriteLine
         var codeRegEx = /(?:<%)[\s\n\t]*(?=[^=|@])([\s\S]+?)[\s\n\t]*(?:%>\s*)/gi;
 
         var startPos = 0;
