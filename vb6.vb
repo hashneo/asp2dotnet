@@ -81,6 +81,9 @@ Shared Function IsNull(v)
     If (TypeOf v Is String) Then
         Return String.IsNullOrEmpty(v)
     End If
+	If (TypeOf v Is System.DBNull) Then
+		Return True
+	End If
     Return (v Is Nothing)
 End Function
 
