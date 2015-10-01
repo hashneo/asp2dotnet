@@ -35,6 +35,10 @@ Public Class PageClass
 		Return Page.createInstance( What )
 	End Function
 
+	Function Response_WriteLine(Str As String)
+		Page.Response_WriteLine(Str)
+	End Function
+
 	Protected Sub New(Page As AspPage)
 		Me._Page = Page
 	End Sub

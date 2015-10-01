@@ -13,4 +13,8 @@ Public Class AspPage
 		End SyncLock
 		Return classInstance
 	End Function
+
+	Function Response_WriteLine(Str As String)
+		Response.Write(Str & vbCrLf)
+	End Function
 End Class
