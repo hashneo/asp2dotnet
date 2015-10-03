@@ -616,7 +616,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                 }
 
                 if ( functionMap[cls]['_Type'] === 'class'){
-                    code = code.substitute( { 'name' : 'new\\s+' + cls }, 'New ' + cls + '( Page )', function(match){
+                    code = code.substitute( { 'name' : 'new\\s+' + cls }, 'New ' + cls + '( MyBase.Page )', function(match){
                         if ( match.indexOf('.') > 0 ){
                             var whichClass = match.split('.')[0];
                             if ( !whichClass.equalsIgnoreCase( item.name) )
