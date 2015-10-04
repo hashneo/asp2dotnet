@@ -35,13 +35,14 @@ CodeSanitizer = function(){
 
         var wordList = ['Open', 'Close', 'Read', 'Write', 'Add', 'AddNew', 'Update', 'Execute', 'Set', 'appendChild', 'setProperty', 'setNamedItem', 'appendChild', 'SaveToFile', 'LogEvent', 'WriteFile', 'AddHeader', 'Redirect', 'Transfer', 'Raise', 'Erase', 'Mark', 'MarkIn', 'MarkOut'];
 
-        var regEx = new RegExp( '^(?!.*\\b\\w+\\.\\b(?:' + wordList.join('|' )+ ')\\s*(?:\\(.*\\)|=.*)$).*\\b(\\w+)\\.(' + wordList.join('|' )+ ')\\b\\s*?(.*)(\'.*)?$', 'gmi');
+        var regEx = new RegExp( '^(?!.*\\b\\w+\\.\\b(?:' + wordList.join('|' )+ ')\\s*(?:\\(.*\\)|=.*)$)(.*)\\b(\\w+)\\.(' + wordList.join('|' )+ ')\\b\\s*?(.*)(\'.*)?$', 'gmi');
 
-        code = code.replace(regEx, function(m, p1, p2, p3, p4 ){
+        code = code.replace(regEx, function(m, p0, p1, p2, p3, p4 ){
             // Check for being in comments or Strings
             var x = m.indexOf(p1 + '.' + p2);
             var p = 0;
             var c = 0;
+
             while(x >= 0 && m[x] != '\n'){
                 if ( m[x] === '"' )
                     p++;
@@ -49,6 +50,9 @@ CodeSanitizer = function(){
                     c++;
                 x--;
             }
+
+            if ( p3.indexOf('(') == 0 )
+                return m;
 
             if ( p > 0 && p % 2 != 0 )
                 return m;
@@ -61,14 +65,14 @@ CodeSanitizer = function(){
                 while( x > 0 ){
                     if ( p3[x] == '\'' ){
                         x--;
-                        return p1 + '.' + p2 + '(' + p3.substr(0,x) + ')' + p3.substr(x) + (p4 !== undefined ? p4 : '');
+                        return p0 + p1 + '.' + p2 + '(' + p3.substr(0,x) + ')' + p3.substr(x) + (p4 !== undefined ? p4 : '');
                     }
                     x--;
                 }
-                return p1 + '.' + p2 + '(' + p3 + ')' + (p4 !== undefined ? p4 : '');
+                return p0 + p1 + '.' + p2 + '(' + p3 + ')' + (p4 !== undefined ? p4 : '');
             }
             else
-                return p1 + '.' + p2 + '(' + p3 + ')' + (p4 !== undefined ? p4 : '');
+                return  p0 + p1 + '.' + p2 + '(' + p3 + ')' + (p4 !== undefined ? p4 : '');
         });
 
         code = code.replace(/\bNew\s+Date\(\)\s+(\+|\-)\s+(\d+)/gmi, 'New Date().AddDays($1$2)');
