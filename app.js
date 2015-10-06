@@ -307,6 +307,32 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                     console.log('Source file => ' + sourceFile + ' has not changed, skipping');
 
                 skipFile = fileProtected | !hasChanged;
+
+                if ( skipFile ){
+
+                    if ( sourceFile !== undefined ) {
+                        var sourceData = fs.readFileSync(entry.vb);
+                        sourceData = sourceData.toString('utf8');
+
+                        var newHeader = '';
+                        newHeader += '#Region \"asp2dotnet converter header\"\n';
+                        newHeader += '\' Source file: ' + converterHeader['Source file'] + '\n';
+                        newHeader += '\' Source MD5: ' + entry.md5 + '\n';
+                        newHeader += '\' Original Modified: ' + converterHeader['Original Modified'] + '\n';
+                        newHeader += '\' Date Converted: ' + converterHeader['Date Converted'] + '\n';
+                        newHeader += '\' File Protected: ' + converterHeader['File Protected'] + '\n';
+                        newHeader += '#End Region';
+
+                        var headerRegEx = /#Region\s+"asp2dotnet\s+converter\s+header"([\s\S]+?)#End Region/gi;
+
+                        sourceData = sourceData.replace( headerRegEx, function(){
+                            return newHeader;
+                        });
+
+                        fs.writeFileSync(entry.vb, sourceData);
+                    }
+
+                }
             }
 
             if (!skipFile) {
@@ -817,7 +843,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         if ( sourceFile !== undefined ) {
             vb.write('#Region \"asp2dotnet converter header\"\n');
             vb.write('\' Source file: "file://' + sourceFile + '"\n');
-            vb.write('\' Source MD5: "' + entry.md5 + '"\n');
+            //vb.write('\' Source MD5: "' + entry.md5 + '"\n');
             vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
             vb.write('\' Date Converted: ' + new Date().toISOString() + '\n');
             vb.write('\' File Protected: false\n');
