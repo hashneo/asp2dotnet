@@ -1057,7 +1057,7 @@ console.log ("finished processing at => " + new Date().toLocaleTimeString());
 // Write out our base class
 fs.writeFileSync( path.join( targetPath, "PageClass.vb" ), fs.readFileSync('PageClass.vb') );
 fs.writeFileSync( path.join( targetPath, "AspPage.vb" ), fs.readFileSync('AspPage.vb') );
-fs.writeFileSync( path.join( targetPath, "web.config" ), fs.readFileSync('web.config') );
+//fs.writeFileSync( path.join( targetPath, "web.config" ), fs.readFileSync('web.config') );
 
 writtenFiles.push(path.join( targetPath, "PageClass.vb" ));
 writtenFiles.push(path.join( targetPath, "AspPage.vb" ));
