@@ -32,7 +32,7 @@ var argv = require('yargs')
             type: 'string'
         },
         'project' : {
-            demand: true,
+            demand: false,
             describe: 'VB.Net project to create. Relative to output path.',
             type: 'string'
         },
@@ -1062,53 +1062,54 @@ fs.writeFileSync( path.join( targetPath, "web.config" ), fs.readFileSync('web.co
 writtenFiles.push(path.join( targetPath, "PageClass.vb" ));
 writtenFiles.push(path.join( targetPath, "AspPage.vb" ));
 
+if ( argv.project !== undefined ) {
+    var targetProjFile = path.resolve(path.join(targetPath, argv.project));
+    var targetProjectParts = path.parse(targetProjFile);
+    var targetProjectPath = targetProjectParts.dir;
 
-var targetProjFile = path.resolve( path.join( targetPath, argv.project ) );
-var targetProjectParts = path.parse(targetProjFile);
-var targetProjectPath = targetProjectParts.dir;
+    targetProjectParts.ext = '.vbproj';
+    targetProjectParts.base = targetProjectParts.name + targetProjectParts.ext;
 
-targetProjectParts.ext = '.vbproj';
-targetProjectParts.base = targetProjectParts.name + targetProjectParts.ext;
+    targetProjFile = path.format(targetProjectParts);
 
-targetProjFile = path.format(targetProjectParts);
+    if (argv.overwrite || !fs.existsSync(targetProjFile)) {
 
-if ( argv.overwrite || !fs.existsSync(targetProjFile) ) {
+        console.log("Creating VB Project File => " + targetProjFile)
+        // Write out the project
+        var data = fs.readFileSync('template.vbproj');
 
-    console.log("Creating VB Project File => " + targetProjFile )
-    // Write out the project
-    var data = fs.readFileSync('template.vbproj');
+        data = data.toString('utf8');
 
-    data = data.toString('utf8');
+        data = data.replace('%GUID%', uuid.v4());
 
-    data = data.replace('%GUID%', uuid.v4());
+        var files = [];
+        var codeFiles = [];
 
-    var files = [];
-    var codeFiles = [];
+        for (var i = 0; i < writtenFiles.length; i++) {
+            var f = writtenFiles[i];
+            var parts = path.parse(f);
+            var s = path.relative(targetProjectPath, f);
+            var dosPath = s.replace(/\//g, '\\');
 
-    for (var i = 0; i < writtenFiles.length; i++) {
-        var f = writtenFiles[i];
-        var parts = path.parse(f);
-        var s = path.relative(targetProjectPath, f);
-        var dosPath = s.replace(/\//g, '\\');
+            if (parts.ext === '.aspx') {
+                files.push('<Content Include="' + dosPath + '" />');
+                codeFiles.push('<Compile Include="' + dosPath + '.vb"><DependentUpon>' + dosPath + '</DependentUpon><SubType>ASPXCodeBehind</SubType></Compile>');
+            }
+            else {
+                if (!parts.base.endsWith('.aspx.vb'))
+                    codeFiles.push('<Compile Include="' + dosPath + '"></Compile>');
+            }
 
-        if (parts.ext === '.aspx') {
-            files.push('<Content Include="' + dosPath + '" />');
-            codeFiles.push('<Compile Include="' + dosPath + '.vb"><DependentUpon>' + dosPath + '</DependentUpon><SubType>ASPXCodeBehind</SubType></Compile>');
         }
-        else {
-            if (!parts.base.endsWith('.aspx.vb'))
-                codeFiles.push('<Compile Include="' + dosPath + '"></Compile>');
-        }
 
+        data = data.replace('%ITEMS%', files.join('\n'));
+        data = data.replace('%COMPILES%', codeFiles.join('\n'));
+        data = data.replace('%NAMESPACE%', targetNamespace);
+
+        var proj = fs.createWriteStream(targetProjFile);
+
+        proj.write(data);
     }
-
-    data = data.replace('%ITEMS%', files.join('\n'));
-    data = data.replace('%COMPILES%', codeFiles.join('\n'));
-    data = data.replace('%NAMESPACE%', targetNamespace );
-
-    var proj = fs.createWriteStream(targetProjFile);
-
-    proj.write(data);
 }
 
 console.log( 'all done' );
