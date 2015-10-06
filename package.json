@@ -20,6 +20,7 @@
     "forallasync": "^1.0.2",
     "glob": "^5.0.13",
     "isnumeric": "^0.2.0",
+    "md5": "^2.0.0",
     "mkdirp": "^0.5.1",
     "node-uuid": "^1.4.3",
     "path-extra": "^1.0.3",

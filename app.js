@@ -3,6 +3,7 @@ var path = require('path-extra');
 var mkdirp = require('mkdirp');
 var streamBuffers = require("stream-buffers");
 var glob = require('glob');
+var md5 = require('md5');
 
 var uuid = require('node-uuid');
 var isNumeric = require("isnumeric")
@@ -146,6 +147,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     if ( !writeMode ){
         if ( argv.verbose && sourceFile !== undefined  )
             console.log( 'pre-reading and merging file => ' + sourceFile );
+    }else{
+        if ( sourceFile !== undefined )
+            entry['md5'] = md5(data);
     }
 
     var sourcePath = sourceFile !== undefined ? path.dirname( sourceFile ) : undefined;
@@ -414,7 +418,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             var regEx = /([^\n]+)/gi;
 
             while (( match = regEx.exec(htmlCode) ) != null) {
-                var line = sanitizer.clean( replaceInlineCode(match[1]) );
+                var line = sanitizer.clean( replaceInlineCode(match[1]), entry.in );
 
                 line = line.replace(/<%@.*%>/g, '');
 
@@ -431,7 +435,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         remainingData = remainingData.replace(regEx, function (match, p1) {
             return '<%\n' + p1 + '%>\n';
         });
-
 
         // Convert all inline HTML code to Response_WriteLine
         var codeRegEx = /(?:<%)[\s\n\t]*(?=[^=|@])([\s\S]+?)[\s\n\t]*(?:%>\s*)/gi;
@@ -814,6 +817,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         if ( sourceFile !== undefined ) {
             vb.write('#Region \"asp2dotnet converter header\"\n');
             vb.write('\' Source file: "file://' + sourceFile + '"\n');
+            vb.write('\' Source MD5: "' + entry.md5 + '"\n');
             vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
             vb.write('\' Date Converted: ' + new Date().toISOString() + '\n');
             vb.write('\' File Protected: false\n');
@@ -908,7 +912,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             remainingData = remainingData.replace(/Option\s+Explicit/gi, '').replace(/([^\n]+)/g, '\t\t$1').replace(/('.*\n(\n){2})/g, '\n').replace(/^\s*\n{2}/gm, '');
 
-            vb.write(sanitizer.clean(remainingData) + '\n');
+            vb.write(sanitizer.clean(remainingData, entry.in) + '\n');
 
             vb.write('\tEnd Sub\n');
 

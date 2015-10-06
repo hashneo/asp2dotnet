@@ -1,6 +1,6 @@
 CodeSanitizer = function(){
 
-    this.clean = function(code) {
+    this.clean = function(code, file) {
 
         code = code
             //.replace(/Response\.Redirect\s+(.*(\s+&\s+vbCrLf)?)(.*)/gi,'Response.Redirect( $1 )$2')

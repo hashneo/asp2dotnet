@@ -100,7 +100,7 @@ FunctionsParser = function(){
             var thisBlock = {
                 'function' : functionMap[fnName],
                 'comment' : commentBlock,
-                'code' : sanitizer.clean( codeBlock.replace(/([^\n]+)/g, '\t$1') )
+                'code' : sanitizer.clean( codeBlock.replace(/([^\n]+)/g, '\t$1'), srcFile )
             };
 
             var result = variablesParser.parse( thisBlock.code, false, true );
