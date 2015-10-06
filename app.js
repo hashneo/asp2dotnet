@@ -307,7 +307,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                     console.log('Source file => ' + sourceFile + ' has not changed, skipping');
 
                 skipFile = fileProtected | !hasChanged;
-
+/*
                 if ( skipFile ){
 
                     if ( sourceFile !== undefined ) {
@@ -333,6 +333,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                     }
 
                 }
+*/
             }
 
             if (!skipFile) {
