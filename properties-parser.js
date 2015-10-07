@@ -3,7 +3,7 @@ PropertiesParser = function(){
     var sanitizer = require('./code-sanitizer');
     var variablesParser = require('./variables-parser');
 
-    this.parse = function(data){
+    this.parse = function(data, entry){
 
         // Strip out any GET/LET statements
         var regEx = /(((?!'(?:\n))(?:\s*'.*?(?:\n))*)\n\s*((public|private)?\s*(?:default\s+)?property\s+(get|let|set)\s+(\w+)\s*(?:\((\w*)\)){0,1})([\s\S]*?)(?:end\s+(?:property)))/gi;
@@ -34,7 +34,9 @@ PropertiesParser = function(){
                 'function' : { 'name' : match[6] }
             };
 
-            var result = variablesParser.parse( property.code );
+            property['function']['class'] = entry.class;
+
+            var result = variablesParser.parse( property.code, false, false, entry );
 
             property['vars'] = result.vars;
 

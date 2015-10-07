@@ -1,7 +1,7 @@
 
 VariablesParser = function() {
 
-    this.parse = function(data, verbose, noRename) {
+    this.parse = function(data, verbose, noRename, entry) {
 
         function parseConst(code) {
             var comments = '';
@@ -32,6 +32,8 @@ VariablesParser = function() {
                     'comment': ( match[5] != undefined ? match[5] : comments ).replace(/^'/gm, '').split('\n'),
                     'hits': 0
                 };
+
+                result['class'] = entry.class;
 
                 // Prevent short consts like 'rs' making into the wild
                 if (result.name.length < 4) {

@@ -295,15 +295,21 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
         if ( entry.vb != null ) {
             var fileProtected = converterHeader != undefined && converterHeader['File Protected'] !== undefined ? JSON.parse(converterHeader['File Protected']) : false;
-            var origModified = converterHeader != undefined && converterHeader['Original Modified'] !== undefined ? Date.parse(converterHeader['Original Modified']) : null;
-            var hasChanged = origModified !== undefined ? +origModified != +sourceStat.mtime : true;
+            //var origModified = converterHeader != undefined && converterHeader['Original Modified'] !== undefined ? Date.parse(converterHeader['Original Modified']) : null;
+            var origMd5 = converterHeader != undefined ? converterHeader['Source MD5'] : undefined;
+
+            var hasChanged = origMd5 !== undefined ?  origMd5 !== entry.md5 : true;
 
             var skipFile = false;
 
             if ( !argv.overwrite ) {
-                if (fileProtected)
-                    console.log('INFO: vb file => ' + entry.vb + ' has File Protected = true in the header, skipping');
-                else if (!hasChanged)
+                if (fileProtected) {
+                    if ( hasChanged ){
+                        console.log('WARNING: vb file => ' + entry.vb + ' has changed (MD5 signatures) but File Protected = true in the header, skipping');
+                    }else{
+                        console.log('INFO: vb file => ' + entry.vb + ' has File Protected = true in the header, skipping');
+                    }
+                }else if (!hasChanged)
                     console.log('Source file => ' + sourceFile + ' has not changed, skipping');
 
                 skipFile = fileProtected | !hasChanged;
@@ -323,7 +329,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         newHeader += '\' File Protected: ' + converterHeader['File Protected'] + '\n';
                         newHeader += '#End Region';
 
-                        var headerRegEx = /#Region\s+"asp2dotnet\s+converter\s+header"([\s\S]+?)#End Region/gi;
+                        var headerRegEx = /#Region\s+"asfp2dotnet\s+converter\s+header"([\s\S]+?)#End Region/gi;
 
                         sourceData = sourceData.replace( headerRegEx, function(){
                             return newHeader;
@@ -499,20 +505,20 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
     });
 
     // First remove all Functions
-    var result = functionsParser.parse( remainingData, argv.verbose, entry.in );
+    var result = functionsParser.parse( remainingData, argv.verbose, entry );
     var functionBlocks = result.blocks;
     functionMap[entry.class] = result.map;
     functionMap[entry.class]['_Level'] = entry.level;
     functionMap[entry.class]['_Type'] = entry.type;
 
     // Next we remove all Properties (GET/LET)
-    var result = propertiesParser.parse( result.data, argv.verbose );
+    var result = propertiesParser.parse( result.data, entry, argv.verbose );
     functionMap[entry.class]['_Properties'] = result.properties;
 
     var globalBlocks = '';
 
     // Finally get all of the Variables
-    result = variablesParser.parse( result.data, argv.verbose, entry.type === 'class' || (argv.rename == false) );
+    result = variablesParser.parse( result.data, argv.verbose, entry.type === 'class' || (argv.rename == false), entry );
 
     functionMap[entry.class]['_Variables'] = result.vars;
     functionMap[entry.class]['_Constants'] = result.consts;
@@ -610,6 +616,9 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
             var thisFunction = block.function;
             var localVariables = block.vars;
 
+            var classProperties = functionMap[thisFunction.class]['_Properties'];
+            var classVariables = functionMap[thisFunction.class]['_Variables'];
+
             var code = block.code;
 
             if (code.trim().length == 0)
@@ -678,6 +687,12 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                             if ( localVariables !== undefined && localVariables.contains(item.var) )
                                 return;
 
+                            if ( classVariables !== undefined && classVariables.contains(item.var) )
+                                return;
+
+                            if ( classProperties !== undefined && classProperties[item.var] !== undefined )
+                                return;
+
                             var _with = varName + '.' + item.var;
 
                             if (cls === entry.class)
@@ -704,6 +719,12 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                     } else {
 
                         if ( localVariables !== undefined && localVariables.contains(name) )
+                            continue;
+
+                        if ( classVariables !== undefined && classVariables.contains(name) )
+                            continue;
+
+                        if ( classProperties !== undefined && classProperties[name] !== undefined )
                             continue;
 
                         var _with = varName + '.' + name;
@@ -804,7 +825,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
 
         if ( !vbSourceFile ) {
-            remainingData = processFunctionMap({ 'function' : { name : '', 'parameters' : undefined } , 'code' : remainingData } );
+            remainingData = processFunctionMap({ 'function' : { name : '', 'parameters' : undefined, 'class' : entry.class } , 'code' : remainingData } );
         }
 
         var dimModules = ''
@@ -844,7 +865,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         if ( sourceFile !== undefined ) {
             vb.write('#Region \"asp2dotnet converter header\"\n');
             vb.write('\' Source file: "file://' + sourceFile + '"\n');
-            //vb.write('\' Source MD5: "' + entry.md5 + '"\n');
+            vb.write('\' Source MD5: "' + entry.md5 + '"\n');
             vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
             vb.write('\' Date Converted: ' + new Date().toISOString() + '\n');
             vb.write('\' File Protected: false\n');

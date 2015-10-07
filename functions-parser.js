@@ -5,7 +5,9 @@ FunctionsParser = function(){
     var sanitizer = require('./code-sanitizer');
     var variablesParser = require('./variables-parser');
 
-    this.parse = function(data, verbose, srcFile){
+    this.parse = function(data, verbose, entry){
+
+        var srcFile = entry.in
 
         // Strip out code functions and subs
         var regEx =/^\s*(((?:(public|protected|private)\s+)?(shared\s+)?(?:(?:overrides)\s+)?(sub|function)\s+(\w+)(\s*\(\s*(.*?)\s*\))?(?:\s+as\s\w+)?){1}([\s\S]+?)(?:end\s+(?:sub|function)){1})[^\n]*$/gmi;
@@ -93,7 +95,8 @@ FunctionsParser = function(){
                     'global' : global,
                     'signature' : fnSignature,
                     'parameters' : parameters.trim().length > 0 ? parameters.split(',') : undefined,
-                    'hits': 0
+                    'hits': 0,
+                    'class' : entry.class
                 };
             }
 
@@ -103,7 +106,7 @@ FunctionsParser = function(){
                 'code' : sanitizer.clean( codeBlock.replace(/([^\n]+)/g, '\t$1'), srcFile )
             };
 
-            var result = variablesParser.parse( thisBlock.code, false, true );
+            var result = variablesParser.parse( thisBlock.code, false, true, entry );
 
             result.vars.forEach( function( thisVar ){
                 if ( thisVar.name !== thisVar.var ){
