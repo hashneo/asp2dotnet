@@ -881,7 +881,7 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
         if ( sourceFile !== undefined ) {
             vb.write('#Region \"asp2dotnet converter header\"\n');
             vb.write('\' Source file: "file://' + sourceFile + '"\n');
-            vb.write('\' Source MD5: "' + entry.md5 + '"\n');
+            vb.write('\' Source MD5: ' + entry.md5 + '\n');
             vb.write('\' Original Modified: ' + sourceStat.mtime.toISOString() + '\n');
             vb.write('\' Date Converted: ' + new Date().toISOString() + '\n');
             vb.write('\' File Protected: false\n');
