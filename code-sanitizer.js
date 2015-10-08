@@ -22,8 +22,11 @@ CodeSanitizer = function(){
 
             .replace(/\bSetLocale\b\s*\(?(.*)\)?/gi,'Page.Culture = $1')
             .replace(/\bGetLocale\b\s*(?:\(\s*\))?/gi,'Page.Culture')
-
-
+/*
+        code = code
+            .replace(/(\s+)(when)(\s+)/gi,'$1_$2$3')
+            .replace(/(\s+)(ctype)(\s+)/gi,'$1_$2$3')
+*/
         code = code
             .replace(/Response\.Cookies\b\s*(\(.*?\))(\s*\(.*?\))?\s*=(.*)/gi, function(m,p1,p2,p3){
                 if (p2 === undefined )

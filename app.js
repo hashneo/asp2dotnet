@@ -38,7 +38,12 @@ var argv = require('yargs')
         },
         'overwrite' : {
             demand: false,
-            describe: 'Overwrite all files, ignoring timestamps and File Protected: directive',
+            describe: 'Overwrite all files, ignoring md5 and File Protected: directive',
+            type: 'boolean'
+        },
+        'ignore-md5' : {
+            demand: false,
+            describe: 'Skip md5 check. Basically update all unlocked files',
             type: 'boolean'
         },
         'no-rename' : {
@@ -300,17 +305,21 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
             var hasChanged = origMd5 !== undefined ?  origMd5 !== entry.md5 : true;
 
+            if ( argv.ignoreMd5 )
+                hasChanged = true;
+
             var skipFile = false;
 
             if ( !argv.overwrite ) {
                 if (fileProtected) {
-                    if ( hasChanged ){
+                    if (hasChanged) {
                         console.log('WARNING: vb file => ' + entry.vb + ' has changed (MD5 signatures) but File Protected = true in the header, skipping');
-                    }else{
+                    } else {
                         console.log('INFO: vb file => ' + entry.vb + ' has File Protected = true in the header, skipping');
                     }
-                }else if (!hasChanged)
+                } else if (!hasChanged) {
                     console.log('Source file => ' + sourceFile + ' has not changed, skipping');
+                }
 
                 skipFile = fileProtected | !hasChanged;
 /*
@@ -669,7 +678,6 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                     // already thought about it. Our Vb6 class is a special case!
                     if ( cls !== 'Vb6' )// && cls !== entry.class)
                         continue;
-
                 }
 
                 for (var name in functionMap[cls]) {
@@ -681,17 +689,24 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
 
                         functionMap[cls][name].forEach( function( item ){
 
+                            if ( cls === 'InfrastructureLoginStatsForgotPasswordRequestRecord' )
+                                _debug = 1;
+                            if ( item.name === '_When')
+                                _debug = 1;
+
                             if ( ( thisFunction !== undefined && item.name.toLowerCase() === thisFunction.name.toLowerCase() ) )
                                 return;
 
                             if ( localVariables !== undefined && localVariables.contains(item.var) )
                                 return;
 
-                            if ( classVariables !== undefined && classVariables.contains(item.var) )
-                                return;
+                            if (cls !== entry.class){
+                                if ( classVariables !== undefined && classVariables.contains(item.var) )
+                                    return;
 
-                            if ( classProperties !== undefined && classProperties[item.var] !== undefined )
-                                return;
+                                if ( classProperties !== undefined && classProperties[item.var] !== undefined )
+                                    return;
+                            }
 
                             var _with = varName + '.' + item.var;
 
@@ -721,12 +736,13 @@ function processFile( entry, rabbitHoleMode, writeMode ) {
                         if ( localVariables !== undefined && localVariables.contains(name) )
                             continue;
 
-                        if ( classVariables !== undefined && classVariables.contains(name) )
-                            continue;
+                        if (cls !== entry.class) {
+                            if (classVariables !== undefined && classVariables.contains(name))
+                                continue;
 
-                        if ( classProperties !== undefined && classProperties[name] !== undefined )
-                            continue;
-
+                            if (classProperties !== undefined && classProperties[name] !== undefined)
+                                continue;
+                        }
                         var _with = varName + '.' + name;
                         if (cls === entry.class)
                             _with = 'Me.' + name;

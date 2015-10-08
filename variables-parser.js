@@ -55,6 +55,9 @@ VariablesParser = function() {
 
             if (w === 'cdate') return true;
             if (w === 'char') return true;
+            if (w === 'ctype') return true;
+            if (w === 'when') return true;
+            if (w === 'return') return true;
 
             return false;
         }
