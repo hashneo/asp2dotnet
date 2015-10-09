@@ -1,3 +1,7 @@
+Imports System.Web
+Imports System.Web.UI
+Imports System.Web.SessionState
+
 Public Class AspPage
 	Inherits Page
 
