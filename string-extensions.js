@@ -42,7 +42,7 @@ String.prototype.getCommentsBlocks = function( pos ){
     while (--i >= 0) {
         if (data[i] == '\n') {
             if (previousLine.replace(/\s*/,'').length > 0) {
-                if (previousLine.trim()[0] == '\'' || previousLine.trim()[0] == '<')
+                if ((previousLine.trim()[0] == '\'' || previousLine.trim()[0] == '<') && previousLine.trim().search(/<\s*%/) == -1)
                     commentBlock = previousLine + '\n' + commentBlock;
                 else {
                     if ( commentBlock.length > 0 ){
