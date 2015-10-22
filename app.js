@@ -1068,15 +1068,16 @@ for( var i = 0 ; i < sourceFiles.length ; i++ ){
     entry['level'] = 0;
 
     var cacheKey = path.join( path.relative( targetPath, path.parse(entry.vb).dir ), fileName);
-
+/*
     if ( functionMapCache[cacheKey] != undefined ){
         functionMap = JSON.parse( JSON.stringify( functionMapCache[cacheKey] ) );
     }else{
+    */
         functionMap = {};
         // We alway include our vb6 legacy stuff
         if ( functionMapCache.vb6 != undefined )
             functionMap = functionMapCache.vb6; //JSON.parse( JSON.stringify( functionMapCache.vb6 ) );
-    }
+    //}
 
     // First process is to create a global map of functions, constants and variables for the next step of writing out the code
     processFile( entry, false, false );
@@ -1084,7 +1085,7 @@ for( var i = 0 ; i < sourceFiles.length ; i++ ){
     // Now write the code and handle the function mappings
     processFile( entry, rabbitHoleMode, true );
 
-    functionMapCache[cacheKey] = functionMap;
+    //functionMapCache[cacheKey] = functionMap;
 };
 
 //fs.writeFileSync( functionMapFile, JSON.stringify( functionMapCache, null, '  ' ) );
