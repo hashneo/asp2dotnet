@@ -93,16 +93,19 @@ CodeSanitizer = function(){
 
         code = code.functionReplace( 'round', 'Math.Round' );
         code = code.functionReplace( 'abs', 'Math.Abs' );
+        code = code.functionReplace( 'tan', 'Math.Atan' );
+        code = code.functionReplace( 'sin', 'Math.sin' );
+        code = code.functionReplace( 'sqr', 'Math.sqrt' );
         code = code.functionReplace( 'array', 'New Object()', '{', '}' );
 
         code = code.replace(/\s+isNullOrEmpty\s*(?=\(*)/gi, function(match, p1){
             return match;
         });
-
+/*
         code = code.replace(/\s+isEmpty\s*(?=\(*)/gi, function(match, p1){
             return ' isNullOrEmpty ';
         });
-
+*/
         //.replace(,'String.isNullOrEmpty')
         //.replace(,'String.isNullOrEmpty')
 
