@@ -56,6 +56,11 @@ var argv = require('yargs')
             describe: 'Only process the given ASP files, ignore includes',
             type: 'boolean'
         },
+        'no-builtin' : {
+            demand: false,
+            describe: 'Do not generate AspPage.vb and PageClass.vb',
+            type: 'boolean'
+        },
         'rabbit-hole' : {
             demand: false,
             describe: 'Look for linked ASP files and add them to the list of files to be processed',
@@ -1035,6 +1040,8 @@ for( var i in argv.page ){
 
 console.log ("started processing at => " + new Date().toLocaleTimeString());
 
+var vb6Map = {};
+
 for( var i = 0 ; i < sourceFiles.length ; i++ ){
 
     if ( i == 0 && argv.vb6 == false )
@@ -1067,17 +1074,8 @@ for( var i = 0 ; i < sourceFiles.length ; i++ ){
 
     entry['level'] = 0;
 
-    var cacheKey = path.join( path.relative( targetPath, path.parse(entry.vb).dir ), fileName);
-/*
-    if ( functionMapCache[cacheKey] != undefined ){
-        functionMap = JSON.parse( JSON.stringify( functionMapCache[cacheKey] ) );
-    }else{
-    */
-        functionMap = {};
-        // We alway include our vb6 legacy stuff
-        if ( functionMapCache.vb6 != undefined )
-            functionMap = functionMapCache.vb6; //JSON.parse( JSON.stringify( functionMapCache.vb6 ) );
-    //}
+    functionMap = {};
+    functionMap = vb6Map;
 
     // First process is to create a global map of functions, constants and variables for the next step of writing out the code
     processFile( entry, false, false );
@@ -1085,17 +1083,20 @@ for( var i = 0 ; i < sourceFiles.length ; i++ ){
     // Now write the code and handle the function mappings
     processFile( entry, rabbitHoleMode, true );
 
-    //functionMapCache[cacheKey] = functionMap;
+    if ( className == 'Vb6' )
+        vb6Map = functionMap
 };
 
 //fs.writeFileSync( functionMapFile, JSON.stringify( functionMapCache, null, '  ' ) );
 
 console.log ("finished processing at => " + new Date().toLocaleTimeString());
 
+if ( argv.builtin != false ) {
 // Write out our base class
-fs.writeFileSync( path.join( targetPath, "PageClass.vb" ), fs.readFileSync('PageClass.vb') );
-fs.writeFileSync( path.join( targetPath, "AspPage.vb" ), fs.readFileSync('AspPage.vb') );
+    fs.writeFileSync(path.join(targetPath, "PageClass.vb"), fs.readFileSync('PageClass.vb'));
+    fs.writeFileSync(path.join(targetPath, "AspPage.vb"), fs.readFileSync('AspPage.vb'));
 //fs.writeFileSync( path.join( targetPath, "web.config" ), fs.readFileSync('web.config') );
+}
 
 writtenFiles.push(path.join( targetPath, "PageClass.vb" ));
 writtenFiles.push(path.join( targetPath, "AspPage.vb" ));
