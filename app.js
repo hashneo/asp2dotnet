@@ -21,6 +21,11 @@ var argv = require('yargs')
             describe: 'ASP page(s) to process. Wildcards are also ok. !!Beware of Globbing!!. Use /blah/\\*\\*/*.asp for recursion.',
             type: 'array'
         },
+        'exclude':{
+            demand: false,
+            describe: 'ASP page(s) to exclude. Wildcards are also ok. !!Beware of Globbing!!. Use /blah/\\*\\*/*.asp for recursion.',
+            type: 'array'
+        },
         'out' : {
             demand: true,
             describe: 'Base output path to write files to. Any include writes will be relative to this path (beware of ../../path/script.asp!)',
@@ -1036,6 +1041,24 @@ sourceFiles.push( 'vb6.vb' );
 
 for( var i in argv.page ){
     sourceFiles =  sourceFiles.concat( glob.sync( path.join( basePath, argv.page[i] ) ) );
+}
+
+if (argv.exclude !== undefined) {
+    var excludeFiles = []
+    for (var i in argv.exclude) {
+        excludeFiles = excludeFiles.concat(glob.sync(path.join(basePath, argv.exclude[i])));
+    }
+
+    if ( excludeFiles.length > 0 ){
+        var newFiles = [];
+        for( var i in sourceFiles){
+            var sourceFile = sourceFiles[i];
+            if (excludeFiles.indexOf( sourceFile ) == -1 ){
+                newFiles.push(  sourceFile );
+            }
+        }
+        sourceFiles = newFiles;
+    }
 }
 
 console.log ("started processing at => " + new Date().toLocaleTimeString());
